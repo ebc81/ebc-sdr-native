@@ -4,8 +4,9 @@
 **Status:** umgesetzt bis einschließlich Phase 4 (Stand 2026-09-04). Das Repo existiert als
 `github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.3.0` und sind auf Hardware
 verifiziert; `rtlsdr433` ist als v1.3.3 ausgeliefert, `RTL_SDR_AIS_Driver` als v1.4.0 /
-versionCode 56. **Offen ist nur noch Phase 5.** Der Text bleibt als Begründung stehen — er
-ist der Grund, warum es so gebaut wurde, nicht bloß ein Plan.
+versionCode 56. **Von Phase 5 fehlt nur noch die AIS-Hälfte** — 433 ist fertig und
+ausgeliefert, der Pager fertig bis auf seinen Release. Der Text bleibt als Begründung stehen
+— er ist der Grund, warum es so gebaut wurde, nicht bloß ein Plan.
 **Grundlage:** [ANALYSE.md](ANALYSE.md)
 
 ---
@@ -257,10 +258,19 @@ versionCode 56 am 2026-09-04.)* Zuletzt, weil dort die meisten Eigenheiten häng
 Kotlin-Layer, und `librtlsdr_andro.c` inkludiert dort zusätzlich Projekt-Header
 (`rtl_ais_andro.h`, `rtlaisjava_err.h`).
 
-**Phase 5 — GPL-Umstellung.** *(teilweise: dieses Repo ist öffentlich, der app-seitige Teil
-steht aus — der einzige verbliebene Punkt.)* Dieses Repo öffentlich machen, die app-seitigen
-Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzieren und in jeder App auf
-das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
+**Phase 5 — GPL-Umstellung.** *(größtenteils erledigt.)* Dieses Repo öffentlich machen, die
+app-seitigen Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzieren und in jeder
+App auf das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
+
+> **Stand 2026-09-05, in den App-Repos geprüft:** Dieses Repo ist öffentlich. `rtlsdr433` ist
+> fertig und mit v1.3.3 ausgeliefert — `NOTICE` nennt Repo und Tag samt Drei-Jahres-Frist, das
+> Sync-Skript schließt das Submodule mit `/XD ebc-sdr-native` aus, der Mirror ist geschrumpft.
+> `rtlsdrPager` hat dieselben Texte im Repo, ist aber ungetaggt; sein Mirror steht bewusst noch
+> auf dem Vor-Migrations-Stand, weil er zum ausgelieferten Binary passt, und zieht mit dem
+> nächsten Release nach. Offen ist allein `RTL_SDR_AIS_Driver`: als Ganzes GPL, ohne Mirror
+> (und ohne Bedarf für einen), mit einem Written Offer in der App, das noch auf
+> Drittkomponenten zugeschnitten ist, die Drei-Jahres-Frist nicht nennt und `ebc-sdr-native`
+> nicht aufführt.
 
 ---
 
