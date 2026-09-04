@@ -65,9 +65,19 @@ Phase 1 added two files with no upstream at all: `rtl-sdr/src/librtlsdr_internal
 
 ## 3. Every patch, with its reason
 
+The **Archive commit** column in the tables below points into `ebc81/ebc-sdr-native-internal`,
+a private repository holding the granular construction history of this tree — the vendored
+import, each backport, each finding fix, the library work. This repository starts with the
+finished tree, so those hashes do not resolve here. That is deliberate: the useful record is
+the prose below, and it is complete without the hashes. They are kept so the author can find
+the exact change.
+
+The **Commit** column in §1 is different — those are upstream commits in osmocom/rtl-sdr and
+rtlsdrblog/rtl-sdr-blog.
+
 ### 3.1 Backported from rtlsdr433 / rtlsdrPager in Phase 0
 
-| # | Patch | From | Commit | Reason |
+| # | Patch | From | Archive commit | Reason |
 | --- | --- | --- | --- | --- |
 | B1 | Five narrowing casts — `librtlsdr.c` `rtlsdr_set_if_freq` `(int32_t)`, `rtlsdr_set_sample_freq_correction` `(int16_t)`, `rtlsdr_set_sample_rate` `(uint32_t)`; `tuner_e4k.c` `compute_flo` and `e4k_compute_pll_params` `(uint32_t)` | rtlsdr433 | `c2d00b8` | All five compute in `double` via `TWO_POW()` and fall back to integers. **Not cosmetic:** without them the AIS tree fails to compile under `-Werror=shorten-64-to-32`, which AIS applies to the translation unit that inline-includes `librtlsdr.c`. Verified — see §5. |
 | B2 | `if (!dev) return -1;` in `rtlsdr_set_direct_sampling()` | rtlsdr433 | `73e5126` | The public wrapper dereferenced `dev->direct_sampling_mode` before any NULL check. The inner `_rtlsdr_set_direct_sampling()` already had the guard. Befund 8. |
@@ -141,7 +151,7 @@ neither upstream** — they are candidates for an upstream patch (§7).
 
 ### 3.5 Findings fixed in Phase 0
 
-| # | Finding | Severity | Commit | What changed |
+| # | Finding | Severity | Archive commit | What changed |
 | --- | --- | --- | --- | --- |
 | P1 | Befund 1 — `rtlsdr_open()` ignored the return value of `rtlsdr_read_eeprom()` | **high** | `1cb0e53` | On a read error `buf[7]` came from uninitialised stack, so `force_bt` could become 1 and **put 5 V on the antenna connector** of a device whose EEPROM never asked for it. Now `memset(buf, ...)` plus an `r < 0` branch, the same hardening `librtlsdr_andro.c` already had. The bug is also in the Blog upstream. |
 | P2 | Befund 9 — bias tee switched by `rtlsdr_set_offset_tuning()` | low | `1cb0e53` | The Blog hack turned the bias tee on for R820T/R828D and then returned `-2` ("not supported"). Removed: a call that answers "not supported" must not put 5 V on the antenna as a side effect. Now osmocom behaviour, as in rtlsdr433/rtlsdrPager. **Behaviour change for `RTL_SDR_AIS_Driver`** — see [CHANGELOG.md](CHANGELOG.md). |
@@ -181,7 +191,7 @@ still preprocesses on a host for analysis.
 The Vorarbeiten of KONZEPT-GEMEINSAME-CODEBASE.md §4. Each one is a change to the tree,
 so each one is listed here.
 
-| # | Vorarbeit | Commit | What changed |
+| # | Vorarbeit | Archive commit | What changed |
 | --- | --- | --- | --- |
 | P5 | 4.1 — decouple `librtlsdr.c` | `d2a902b` | **The Phase 1 blocker.** `android/librtlsdr_andro.c` pulled the whole implementation in with `#include "rtl-sdr/src/librtlsdr.c"`, because it needs the private `struct rtlsdr_dev`: on Android there is no enumeration, so `rtlsdr_open2()` assembles the device itself around `libusb_wrap_sys_device(fd)` instead of calling `rtlsdr_open()`. Cost: `librtlsdr.c` could never be a translation unit (listing it in CMake next to the bridge gave duplicate symbols), and the relative layout of the two trees was frozen. New internal header `rtl-sdr/src/librtlsdr_internal.h` carries what the bridge needs — `struct rtlsdr_dev`, `rtlsdr_tuner_iface_t`, `enum rtlsdr_async_status`, `FIR_LEN`/`EEPROM_SIZE`/`STR_OFFSET`, `DEF_RTL_XTAL_FREQ`, the `usb_reg` and `blocks` register enums, and declarations of the register-level helpers. Contents **moved verbatim**, not rewritten. |
 | P6 | 4.3 — logging and error codes | `d2a902b`, `b70fa64` | New `android/ebc_log.h`. `aprintf_stderr` was a *function* from AIS's `rtl_ais_andro.h` and a *macro* in the other two; it is a macro here with the tag configurable via `EBC_LOG_TAG`. Own error range `EBC_SDR_ERR_*` from -2000 in `librtlsdr_andro.h`, with the mapping table onto each app's codes. Together these are what let the bridge compile without an app. Also closes Befund 10 — see below. |

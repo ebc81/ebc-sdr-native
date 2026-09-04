@@ -32,7 +32,10 @@ a bug in PROVENANCE.md, not something to shrug at.
   library is Android-only, so there is no non-Android branch to select. (rtlsdrPager does use
   it as a real define, `-D__EBCANDROID__=1`, for its `multimon/` tree.) The one place that
   genuinely branches on the platform is `ebc_log.h`, and it uses the NDK's own `__ANDROID__`.
-- One commit per logical patch. `git log` and PROVENANCE.md must stay in agreement.
+- One commit per logical patch. From this repository's first commit onward, `git log` and
+  PROVENANCE.md must stay in agreement. The **Archive commit** hashes in PROVENANCE.md §3
+  predate that and point into the private construction archive — they do not resolve here
+  and are not supposed to.
 
 ## Line endings are LF (MANDATORY)
 
