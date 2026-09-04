@@ -64,10 +64,12 @@ The AGC/VGA finding is directly observable: change frequency repeatedly with AGC
 
 ## Current state
 
-**Phases 0 to 3 are done.** The tree is the union of all three app variants, plus five
-finding fixes, and it builds as a static library `ebc_sdr`. **rtlsdrPager and rtlsdr433 both
-use it**, each pinning tag `v0.3.0` as a submodule, and both are verified on a Blog V4 —
-PROVENANCE.md §5. `RTL_SDR_AIS_Driver` is still untouched; that is Phase 4.
+**Phases 0 to 4 are done.** The tree is the union of all three app variants, plus five
+finding fixes, and it builds as a static library `ebc_sdr`. **All three apps use it**, each
+pinning tag `v0.3.0` as a submodule, and each verified on a Blog V4 — PROVENANCE.md §5.
+`RTL_SDR_AIS_Driver` was the last to migrate and released from that pin as v1.4.0 /
+versionCode 56 on 2026-09-04; `rtlsdr433` ships it as v1.3.3. So the state this repository
+was built for — one shared base, same tag, three shipping apps — is reached.
 
 Phase 1 removed the blocker: `librtlsdr.c` used to be pulled into
 `android/librtlsdr_andro.c` with `#include "rtl-sdr/src/librtlsdr.c"`, because the bridge needs
@@ -80,14 +82,17 @@ enumeration. `rtl-sdr/src/librtlsdr_internal.h` now exposes exactly that much, s
 `librtlsdr.c`, add it to `librtlsdr_internal.h` — moved verbatim, with a PROVENANCE.md §3.8
 entry — rather than restructuring `librtlsdr.c`, which must stay close to upstream.
 
-**Next: Phase 4, `RTL_SDR_AIS_Driver`.** It comes last because it holds the most local
+**Next: Phase 5**, the GPL source paths on the app side — see *Legal posture* below. Nothing
+in this tree blocks it.
+
+The three migrations are the template for any app that adopts this tree later, in the order
+they happened: `rtlsdrPager` commit `2743190`, `rtlsdr433` commit `7f7d7cb`,
+`RTL_SDR_AIS_Driver` commit `4ce3a9d`. AIS went last because it holds the most local
 peculiarities: `minSdk 23`, a `-Werror` contract on three files, its own error-code range
 (-50/-51 out of `rtlaisjava_err.h`), a Java rather than Kotlin layer, `aprintf_stderr` as a
-function of its own in `rtl_ais_andro.h`, the four-parameter `rtlsdr_open2()` call at
-`app/src/main/jni/rtl_ais_andro.c:1836`, and it is the only app that needs
-`EBC_SDR_CONVENIENCE`. What every app has to change is listed in PROVENANCE.md §4. The two
-migrations already done are the template — `rtlsdrPager` commit `2743190` and `rtlsdr433`
-commit `7f7d7cb`.
+function of its own in `rtl_ais_andro.h`, the four-parameter `rtlsdr_open2()` call it used to
+make in `rtl_ais_andro.c`, and it is the only app that needs `EBC_SDR_CONVENIENCE`. What each
+one had to change is listed in PROVENANCE.md §4.
 
 ## Layout
 
@@ -152,11 +157,9 @@ vendored file without an entry in PROVENANCE.md §3.
 ## Never touch the app repositories from here
 
 Phases 0 and 1 changed nothing in `RTL_SDR_AIS_Driver`, `rtlsdr433` or `rtlsdrPager`, and
-verified it by comparing `git status --short` before and after every step. Keep doing that.
-Migrating an app is Phases 2–4, in that order: rtlsdrPager first (zero own changes to the libs,
-lowest coupling), then rtlsdr433, then RTL_SDR_AIS_Driver last (most local peculiarities:
-`-Werror` contract on three files, `minSdk 23`, its own error-code range, `aprintf_stderr` as a
-function of its own, a Java rather than Kotlin layer).
+verified it by comparing `git status --short` before and after every step. **Keep doing that.**
+The migrations (Phases 2 to 4) were the one sanctioned exception, and they are done. Work in
+an app repository belongs in that app repository, from a session opened there.
 
 When you do migrate an app, the app must **delete its own copies** of `rtl-sdr/`,
 `libusb-andro/` and `librtlsdr_andro.c/.h` and remove them from its `add_library()`. Leaving
@@ -167,7 +170,11 @@ them in place gives duplicate symbols now that `librtlsdr.c` is a real translati
 Two licences, kept in separate directories — see [LICENSE.md](LICENSE.md). The tree
 effectively ships under the GPL because `android/` inlines `librtlsdr.c`.
 
-This repository is meant to be **public from the start**, so the GPL source requirement is met
-structurally rather than by a copy step. That is the whole argument for a shared repository
-over the current per-app `-native-gpl` mirrors, and it is Phase 5:
+This repository is **public** — `github.com/ebc81/ebc-sdr-native` — so for the shared part the
+GPL source requirement is met structurally rather than by a copy step. That is the whole
+argument for a shared repository over the per-app `-native-gpl` mirrors.
+
+**Phase 5 is what is left, and it lives in the app repositories, not here:** each app's source
+path has to name this repository and the tag it pins, and each existing mirror has to shrink to
+the app-specific native code, with the submodule directory excluded from its sync. See
 KONZEPT-GEMEINSAME-CODEBASE.md §2 and §3.4.

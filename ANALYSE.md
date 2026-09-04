@@ -4,7 +4,9 @@
 **Umfang:** Analyse der einvendorten `rtl-sdr`- und `libusb-andro`-Bäume in
 `RTL_SDR_AIS_Driver`, `rtlsdr433` und `rtlsdrPager`, verglichen mit den beiden
 relevanten Upstreams.
-**Status:** Reine Analyse. An den drei App-Projekten wurde nichts verändert.
+**Status:** Reine Analyse, Momentaufnahme vom 2026-09-03. An den drei App-Projekten wurde
+zu diesem Zeitpunkt nichts verändert; inzwischen sind alle drei migriert. Wo dieses Dokument
+etwas als offen bezeichnet, gilt [PROVENANCE.md](PROVENANCE.md) — dort steht der Stand.
 
 ## Untersuchte Stände
 
@@ -395,6 +397,7 @@ Verwerfen: L-Band-Dropout, VGA-Gain pro Tune, Bias-T-über-Offset-Tuning, `r82xx
 `rf_freq` (ungenutzt), die `.bak`-Dateien.
 
 Zu entscheiden: VCO-Strom (osmocom vs. Blog-max) — nur mit Messung an einem V4 zu klären.
+*Inzwischen am V4 gemessen und entschieden: der osmocom-Wert bleibt — PROVENANCE.md §6.*
 
 **Kosten:** Der Sprung ist für AIS minimal (es ist bereits dort). Für 433/Pager bedeutet er
 einen Wechsel des R82xx-Verhaltens: andere VCO-Ströme, kein L-Band-Tweak, kein VGA-Reset

@@ -1,7 +1,11 @@
 # Konzept: gemeinsame rtl-sdr-Codebase für alle EBC-Android-Apps
 
 **Erstellt:** 2026-09-03
-**Status:** Vorschlag. Nichts davon ist umgesetzt.
+**Status:** umgesetzt bis einschließlich Phase 4 (Stand 2026-09-04). Das Repo existiert als
+`github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.3.0` und sind auf Hardware
+verifiziert; `rtlsdr433` ist als v1.3.3 ausgeliefert, `RTL_SDR_AIS_Driver` als v1.4.0 /
+versionCode 56. **Offen ist nur noch Phase 5.** Der Text bleibt als Begründung stehen — er
+ist der Grund, warum es so gebaut wurde, nicht bloß ein Plan.
 **Grundlage:** [ANALYSE.md](ANALYSE.md)
 
 ---
@@ -223,7 +227,11 @@ AIS hat `minSdk 23`, 433 und Pager `29`. Die gemeinsame Native-Basis muss auf AP
 
 ## 5. Vorgeschlagene Reihenfolge
 
-**Phase 0 — Union herstellen (in `libs_ebc\`, ohne die Apps anzufassen)**
+> **Stand 2026-09-04:** Phasen 0 bis 4 sind abgearbeitet, in genau dieser Reihenfolge und
+> ohne Abweichung. Was dabei herauskam, steht in [PROVENANCE.md](PROVENANCE.md) §3 bis §5
+> und in [CHANGELOG.md](CHANGELOG.md). Phase 5 ist offen.
+
+**Phase 0 — Union herstellen (in `libs_ebc\`, ohne die Apps anzufassen)** *(erledigt.)*
 AIS-Baum als Basis nehmen, die vier Rückportierungen aus 433/Pager einarbeiten
 (Narrowing-Casts, `!dev`-Guard, die zwei Pager-Bridge-Funktionen, der Pager-Kommentar in
 `linux_usbfs.c`) und die Befunde 1, 6, 9, 10 aus der Analyse beheben. Ergebnis ist ein
@@ -231,24 +239,26 @@ Baum, der jede der drei heutigen Varianten dominiert. `PROVENANCE.md` dabei mits
 nicht danach.
 
 **Phase 1 — Vorarbeiten 4.1 bis 4.8** im `libs_ebc`-Baum umsetzen und dort einmal
-gegen ein Minimal-CMake bauen.
+gegen ein Minimal-CMake bauen. *(erledigt.)*
 
-**Phase 2 — Pilot: rtlsdrPager.** Grund: Pager hat *null* eigene Änderungen an den Libs,
-minSdk 29, und die geringste Kopplung (kein `rtl_433`-Baum, der ebenfalls in rtl-sdr
+**Phase 2 — Pilot: rtlsdrPager.** *(erledigt, Commit `2743190`.)* Grund: Pager hat *null*
+eigene Änderungen an den Libs, minSdk 29, und die geringste Kopplung (kein `rtl_433`-Baum, der ebenfalls in rtl-sdr
 hineinreicht). Wenn der Umbau dort trägt, trägt er überall. Auf echter Hardware
 verifizieren, nicht nur bauen — Abschnitt 6.
 
-**Phase 3 — rtlsdr433.** Bekommt dabei die fehlenden libusb-Unplug-Fixes, die FC0013- und
-VGA-Gain-Korrektur. Achtung: `rtl433/src/sdr.c` enthält einen `__EBCANDROID__`-Block, der
+**Phase 3 — rtlsdr433.** *(erledigt, Commit `7f7d7cb`, ausgeliefert als v1.3.3.)* Bekommt
+dabei die fehlenden libusb-Unplug-Fixes, die FC0013- und VGA-Gain-Korrektur. Achtung: `rtl433/src/sdr.c` enthält einen `__EBCANDROID__`-Block, der
 `rtlsdr_open2()` aufruft und eine eigene lokale Prototyp-Deklaration mitbringt — die muss
 auf den Bibliotheks-Header umgestellt werden.
 
-**Phase 4 — RTL_SDR_AIS_Driver.** Zuletzt, weil dort die meisten Eigenheiten hängen:
+**Phase 4 — RTL_SDR_AIS_Driver.** *(erledigt, Commit `4ce3a9d`, ausgeliefert als v1.4.0 /
+versionCode 56 am 2026-09-04.)* Zuletzt, weil dort die meisten Eigenheiten hängen:
 `-Werror`-Vertrag auf drei Dateien, minSdk 23, eigener Fehlercode-Raum, Java- statt
 Kotlin-Layer, und `librtlsdr_andro.c` inkludiert dort zusätzlich Projekt-Header
 (`rtl_ais_andro.h`, `rtlaisjava_err.h`).
 
-**Phase 5 — GPL-Umstellung.** Dieses Repo öffentlich machen, die app-seitigen
+**Phase 5 — GPL-Umstellung.** *(teilweise: dieses Repo ist öffentlich, der app-seitige Teil
+steht aus — der einzige verbliebene Punkt.)* Dieses Repo öffentlich machen, die app-seitigen
 Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzieren und in jeder App auf
 das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
 
@@ -273,14 +283,15 @@ Ein grüner Build beweist hier wenig — die Unterschiede sitzen im Hardwareverh
 
 ## 7. Offene Entscheidungen
 
-1. **Repo-Name** für die geteilte Basis (`ebc-sdr-native`? `ebc-rtlsdr-android`?).
-2. **VCO-Strom:** osmocom-Wert oder Blog-Maximum? Nur mit einem V4 zu klären.
-3. **Ob `libusb-andro` in dasselbe Repo kommt** oder in ein zweites. Argument dafür:
-   die beiden werden immer zusammen benutzt, und `librtlsdr_andro.c` braucht beide.
-   Argument dagegen: unterschiedliche Lizenzen (GPL-2.0 vs. LGPL-2.1) — beides in einem
-   Repo ist zulässig, muss aber im `LICENSE`/`NOTICE` sauber getrennt ausgewiesen werden.
-   **Empfehlung: ein Repo, getrennte Lizenzdateien pro Unterverzeichnis.**
-4. **Ob der Kotlin-USB-Layer** (`UsbSession.kt`, `UsbOpenActivity.kt`, `NativeBridge.kt`)
+1. ~~**Repo-Name** für die geteilte Basis.~~ **Entschieden:** `ebc81/ebc-sdr-native`.
+2. ~~**VCO-Strom:** osmocom-Wert oder Blog-Maximum?~~ **Auf Hardware entschieden:** der
+   osmocom-Wert bleibt. Am Blog V4 traten über zwei Bänder keine Lock-Aussetzer auf, also
+   ist das Kriterium für den Blog-Hack nicht erfüllt — Messung in PROVENANCE.md §6.
+   Messbar wurde das erst dadurch, dass Befund 10 die `PLL not locked`-Meldungen überhaupt
+   nach logcat bringt.
+3. ~~**Ob `libusb-andro` in dasselbe Repo kommt** oder in ein zweites.~~ **Entschieden:** ein
+   Repo, getrennte Lizenzdateien pro Unterverzeichnis — siehe [LICENSE.md](LICENSE.md).
+4. **Offen: ob der Kotlin-USB-Layer** (`UsbSession.kt`, `UsbOpenActivity.kt`, `NativeBridge.kt`)
    später ebenfalls geteilt wird. 433 und Pager haben dort heute stark divergierende
    Fassungen (Pager deutlich weiter), AIS hat einen Java-Layer. Das wäre ein eigenes
    Android-Library-Modul und ein eigenes Projekt — bewusst **nicht** Teil dieses Konzepts.

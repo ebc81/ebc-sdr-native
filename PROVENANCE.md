@@ -2,7 +2,9 @@
 
 **Tree:** shared native SDR base for the EBC Android apps (working title `ebc-sdr-native`)
 **Created:** 2026-09-04 (Phases 0 and 1 of [KONZEPT-GEMEINSAME-CODEBASE.md](KONZEPT-GEMEINSAME-CODEBASE.md))
-**Status:** builds as a static library, `ebc_sdr`. No app uses it yet — that is Phases 2 to 4.
+**Status:** builds as a static library, `ebc_sdr`. **All three apps use it**, each pinning tag
+`v0.3.0` as a submodule, and each verified on a Blog V4 (§5). Phases 0 to 4 are done; Phase 5
+(the GPL source paths on the app side) is open.
 
 This file is the contract: **every byte that differs from upstream is listed here with a
 reason.** If you change a vendored file, add the entry in the same commit. `git log` and this
@@ -41,8 +43,8 @@ those two commits 47 of the 49 files were byte-identical to what the AIS repo st
 | `librtlsdr.c.bak`, `tuner_r82xx.c.bak` (rtlsdr433 only) | Unmodified Blog code from 2023-10-30. Useful as a merge-base reference, does not belong in a source tree. |
 | `aisdecoder/`, `rtl_ais_andro.*`, `rtlaisjava*` | App-specific, not part of the shared base. |
 
-`rtl-sdr/src/convenience/` **is** included, but it is an optional module: today only
-`RTL_SDR_AIS_Driver` compiles it. Phase 1 gives it its own CMake option.
+`rtl-sdr/src/convenience/` **is** included, but it is an optional module behind
+`EBC_SDR_CONVENIENCE`: only `RTL_SDR_AIS_Driver` compiles it.
 
 ---
 
@@ -94,15 +96,16 @@ rtlsdrblog/rtl-sdr-blog.
 
 ### 3.3 Blog hacks deliberately discarded
 
-Per ANALYSE.md §6.2/§6.3. **rtlsdr433 and rtlsdrPager change hardware behaviour when they
-move to this tree** — that is the point of the Phase-2 hardware verification.
+Per ANALYSE.md §6.2/§6.3. **rtlsdr433 and rtlsdrPager changed hardware behaviour when they
+moved to this tree** — that is what the Phase-2 and Phase-3 hardware verification was for.
+Both are through it; see §5.
 
 | Hack | Why discarded |
 | --- | --- |
 | VGA gain re-set on every tune (`r82xx_set_vga_gain()` in `r82xx_set_freq`) | Pins register `0x0c` to 16.3 dB while `r82xx_set_gain()` sets 26.5 dB in AGC mode — **the AGC loses ~10 dB on every frequency change.** Befund 5. Directly visible: change frequency repeatedly with AGC on and watch the noise floor. The declaration `r82xx_set_vga_gain()` is gone from `tuner_r82xx.h` too. |
 | L-band dropout tweak (`div_buf_cur = 0xa0`) | Only acts above ~1 GHz. Irrelevant for AIS (162 MHz), 433 MHz ISM and POCSAG. |
 | Bias tee via `rtlsdr_set_offset_tuning()` | See P2 below. |
-| VCO current at maximum (`0x12`, `0x06/0xff` instead of `0x80/0xe0`) | The `0xff` mask also overwrites the `pw_sdm` bits that osmocom sets on purpose, so the two approaches cannot be combined. **Open hardware question** — see §6. |
+| VCO current at maximum (`0x12`, `0x06/0xff` instead of `0x80/0xe0`) | The `0xff` mask also overwrites the `pw_sdm` bits that osmocom sets on purpose, so the two approaches cannot be combined. **Decided on hardware: the osmocom value stays** — see §6. |
 | `r82xx_toggle_test()` | Debug function. |
 | `uint32_t rf_freq` in `struct r82xx_priv` | Unused; only reference was a commented-out line. Removed in `61a1490`. |
 
@@ -260,9 +263,13 @@ of this tree in the app's own `add_library()`.
 `rtl-sdr/src/getopt/` is not vendored at all — no app compiles it, and Android has `getopt`
 in libc.
 
-### What each app still has to do — Phases 2 to 4
+### What each app had to do — Phases 2 to 4
 
-None of this is done; the app trees were not touched in Phase 0 or Phase 1.
+**All three are migrated and all three pin tag `v0.3.0`:** `rtlsdrPager` (Phase 2, commit
+`2743190`), `rtlsdr433` (Phase 3, commit `7f7d7cb`, released as v1.3.3) and
+`RTL_SDR_AIS_Driver` (Phase 4, commit `4ce3a9d`, released as v1.4.0 / versionCode 56 on
+2026-09-04). The list below is kept as the record of what each migration involved — and as
+the checklist for any app that adopts this tree later.
 
 1. **Map the error codes at the JNI boundary.** The library returns `EBC_SDR_ERR_LIBUSB_INIT`
    (-2001) and `EBC_SDR_ERR_CLAIM` (-2002), or a raw `LIBUSB_ERROR_*`. AIS's Java contract
@@ -364,7 +371,7 @@ llvm-readelf -l libconsumer.so | grep '^  LOAD'                      # align 0x4
 ### Hardware verification
 
 A green build proves very little here; the differences between the variants sit in hardware
-behaviour. Two runs so far, one per migrated app.
+behaviour. Three runs, one per migrated app — same dongle and same phone throughout.
 
 #### First run: rtlsdrPager, Phase 2
 
@@ -422,7 +429,7 @@ app sets `cfg->frequencies = 1`, so rtl_433's frequency hopping never engages an
 not retune the running device — the app says so itself ("Stop and start decoding to apply
 it"), and the log confirms one `rtlsdr_set_center_freq` per session.
 
-So **two of the three apps cannot observe the VGA reset by construction**, which retires the
+So two of the three apps cannot observe the VGA reset by construction, which retires the
 question this section left open for Phase 3 rather than answering it. The fix stands on the
 register analysis in §3.4: with AGC on, the old code nailed register `0x0c` to 16.3 dB while
 the AGC path sets 26.5 dB. If a live-retune path is ever added to either app — rtl_433's own
@@ -431,6 +438,41 @@ hopping would be enough — the observable comes back with it.
 The capture also showed the bridge logging tuner discovery at ERROR level, inherited from
 rtlsdrPager's macro. Fixed afterwards: `aprintf_info()` for progress notes, `aprintf_stderr()`
 kept for actual failures.
+
+#### Third run: RTL_SDR_AIS_Driver, Phase 4
+
+**2026-09-04, same dongle and phone**, via `RTL_SDR_AIS_Driver` at tag v0.3.0 of this tree —
+the last of the three, and the only one with `minSdk 23`, a Java layer, `EBC_SDR_CONVENIENCE`
+and an external API driven by a second app. Recorded in the app's own `agents.md`
+("Hardware verification of this pin") and `CHANGELOG.md` for v1.4.0; reproduced here because
+this tree's verification gate is a rule of this repository.
+
+| Check | Result |
+| --- | --- |
+| Device opens from the fd | five opens (`fd` 127, 102, 126, 108 and AIS-Share's), no `EBC_SDR_ERR_*`, no `LIBUSB_ERROR_*` |
+| Tuner probe | R828D found, `RTL-SDR Blog V4 Detected` — five times, identical |
+| Tuning | two bands: 162.000 MHz (AIS) and 156.825 MHz (marine) |
+| Gain | automatic, and manual 50 % with AGC off — the latter exercises `set_gain_by_perc()`, this project's own addition to `convenience.c` (§3.4) |
+| Streaming | 3.13–3.20 MB/s steady, **`Skipped = 0` in every stats line** |
+| End-to-end decode | two AIS messages on channel B — weak indoor reception, but RF to Java callback is proven |
+| **Unplug while running** | ten `cb transfer status: 5, canceling...` (one per URB), `do_clean_up()` 21 ms later, done 146 ms after the first cancel — **7 ms *before* the framework broadcast `USB_DEVICE_DETACHED`.** No SIGSEGV, no tombstone, no ANR; PID unchanged |
+| Re-plug | reopened on the first attempt with a fresh `fd`, no `LIBUSB_ERROR_BUSY` |
+| App restart without device restart | `am force-stop` then relaunch: new PID, clean open, 3.19 MB/s |
+| **External API via a second app** | `DeviceOpenActivity` launched from `eu.ebctech.ais_share`, driver started and streamed, status broadcasts flowed back; the `RTLSDRAIS_Exception` contract unchanged |
+| Befund 10, live | five messages under the tag `ais-sdr` that were invisible before, including two at INFO via `aprintf_info()` and three from `convenience.c` through the `ebc_log.h` redirect |
+| Whole session | 0 × SIGSEGV/SIGABRT/fdsan/tombstone, 0 ANR, 0 `LIBUSB_ERROR_*`, 0 `EBC_SDR_ERR_*`, 0 `PLL not locked`, crash buffer empty |
+
+`armeabi-v7a` remains compile-verified only — no 32-bit ARM device was available. `Exact
+sample rate is: …` did not appear here, correctly: 1 600 000 S/s is exactly representable.
+
+**Befund 5 is not observable in this app either, for the same structural reason**: every
+`rtlsdr_set_*` runs once per open, so there is no live retune. That makes it **all three
+apps**, not two — the VGA-reset fix rests entirely on the register analysis in §3.4, and no
+app in this family can currently show it in a log.
+
+This run closed Phase 4. `RTL_SDR_AIS_Driver` released from it as v1.4.0 / versionCode 56 on
+2026-09-04, so all three apps now ship the same shared base at the same tag — the state this
+repository was built for.
 
 ---
 

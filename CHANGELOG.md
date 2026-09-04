@@ -8,6 +8,10 @@ Details and reasoning for every item: [PROVENANCE.md](PROVENANCE.md).
 
 ## v0.3.0 — PPM search removed (2026-09-04)
 
+**The tag all three apps pin today:** `rtlsdrPager`, `rtlsdr433` (released as v1.3.3) and
+`RTL_SDR_AIS_Driver` (released as v1.4.0 / versionCode 56 on 2026-09-04). Each one is verified
+on a Blog V4 — PROVENANCE.md §5.
+
 ### Removed
 
 - **`rtlsdr_supporting_ppm_search()`.** Gone from `librtlsdr_andro.c` and the public
@@ -26,10 +30,10 @@ Details and reasoning for every item: [PROVENANCE.md](PROVENANCE.md).
 
 ---
 
-## Unreleased — Phase 1, the tree is a library (2026-09-04)
+## Phase 1, the tree is a library (2026-09-04) — shipped in v0.3.0
 
-Not tagged yet. No app uses it yet either — migrating them is Phases 2 to 4, and
-PROVENANCE.md §4 lists what each one has to change.
+Written while the phase was current, when no app used the tree yet. All three do now, each
+pinning `v0.3.0`; PROVENANCE.md §4 records what each migration involved.
 
 ### Added
 
@@ -109,15 +113,16 @@ PROVENANCE.md §4 lists what each one has to change.
 - First `LOAD` segment aligned `0x4000` on arm64-v8a and x86_64, `0x1000` on the 32-bit
   ABIs — 64-bit only, as intended.
 - No unredirected `fprintf(stderr` left in any of the six files after preprocessing.
-- All three app repositories still untouched.
-- Still no hardware verification. That starts in Phase 2 with the rtlsdrPager pilot.
+- All three app repositories still untouched at this point.
+- No hardware verification yet at this point. It started in Phase 2 with the rtlsdrPager
+  pilot; all three runs are in PROVENANCE.md §5.
 
 ---
 
-## Unreleased — Phase 0, union tree (2026-09-04)
+## Phase 0, union tree (2026-09-04) — shipped in v0.3.0
 
-Not tagged yet. At the end of this phase the tree was still not buildable as a library —
-that came with Phase 1 above.
+At the end of this phase the tree was still not buildable as a library — that came with
+Phase 1 above.
 
 ### Base
 
@@ -148,8 +153,8 @@ that came with Phase 1 above.
   already did. A call that answers "not supported" must not have a 5 V side effect.
 
   *Migration for `RTL_SDR_AIS_Driver`:* anyone who used the offset-tuning control to switch the
-  bias tee needs a real bias-tee control calling `rtlsdr_set_bias_tee()`. To be handled in
-  Phase 4.
+  bias tee needs a real bias-tee control calling `rtlsdr_set_bias_tee()`. **Settled in Phase 4:
+  no caller in that app ever used offset tuning, so nothing had to be added.**
 
 - **rtlsdr433 and rtlsdrPager will change R82xx behaviour when they adopt this tree.** The tree
   follows osmocom, not the Blog fork:
@@ -162,8 +167,8 @@ that came with Phase 1 above.
   - *no L-band dropout tweak* (`div_buf_cur = 0xa0`) — only acts above ~1 GHz, irrelevant for
     433 MHz ISM and POCSAG.
   - *VCO current stays at the osmocom value* `0x80/0xe0` instead of the Blog maximum
-    `0x06/0xff`. The two are not combinable. **Open question, needs a measurement on a V4** —
-    PROVENANCE.md §6.
+    `0x06/0xff`. The two are not combinable. Open at the time, **since decided on a V4: the
+    osmocom value stays** — PROVENANCE.md §6.
   - They also gain the libusb unplug fixes they are missing today (Befund 3, severity high:
     use-after-free when unplugging on Android 14/15) and the hardened `get_string_descriptor()`
     (Befund 2) and `set_gain_by_perc()` (Befund 4).
