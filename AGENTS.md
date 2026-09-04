@@ -64,9 +64,10 @@ The AGC/VGA finding is directly observable: change frequency repeatedly with AGC
 
 ## Current state
 
-**Phases 0 and 1 are done.** The tree is the union of all three app variants, plus five
-finding fixes, and it builds as a static library `ebc_sdr`. **No app uses it yet** — that is
-Phases 2 to 4.
+**Phases 0 to 3 are done.** The tree is the union of all three app variants, plus five
+finding fixes, and it builds as a static library `ebc_sdr`. **rtlsdrPager and rtlsdr433 both
+use it**, each pinning tag `v0.3.0` as a submodule, and both are verified on a Blog V4 —
+PROVENANCE.md §5. `RTL_SDR_AIS_Driver` is still untouched; that is Phase 4.
 
 Phase 1 removed the blocker: `librtlsdr.c` used to be pulled into
 `android/librtlsdr_andro.c` with `#include "rtl-sdr/src/librtlsdr.c"`, because the bridge needs
@@ -79,11 +80,14 @@ enumeration. `rtl-sdr/src/librtlsdr_internal.h` now exposes exactly that much, s
 `librtlsdr.c`, add it to `librtlsdr_internal.h` — moved verbatim, with a PROVENANCE.md §3.8
 entry — rather than restructuring `librtlsdr.c`, which must stay close to upstream.
 
-**Next: Phase 2, the rtlsdrPager pilot.** Pager first because it has zero own changes to the
-libs, `minSdk 29`, and the least coupling. What every app has to change is listed in
-PROVENANCE.md §4; the short version is error-code mapping at the JNI boundary, the
-two-parameter `rtlsdr_open2()`, deleting its own copies of the trees, and dropping the flags
-the target now owns.
+**Next: Phase 4, `RTL_SDR_AIS_Driver`.** It comes last because it holds the most local
+peculiarities: `minSdk 23`, a `-Werror` contract on three files, its own error-code range
+(-50/-51 out of `rtlaisjava_err.h`), a Java rather than Kotlin layer, `aprintf_stderr` as a
+function of its own in `rtl_ais_andro.h`, the four-parameter `rtlsdr_open2()` call at
+`app/src/main/jni/rtl_ais_andro.c:1836`, and it is the only app that needs
+`EBC_SDR_CONVENIENCE`. What every app has to change is listed in PROVENANCE.md §4. The two
+migrations already done are the template — `rtlsdrPager` commit `2743190` and `rtlsdr433`
+commit `7f7d7cb`.
 
 ## Layout
 

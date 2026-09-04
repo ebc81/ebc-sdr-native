@@ -364,7 +364,11 @@ llvm-readelf -l libconsumer.so | grep '^  LOAD'                      # align 0x4
 ### Hardware verification
 
 A green build proves very little here; the differences between the variants sit in hardware
-behaviour. **2026-09-04, first run on real hardware**, via rtlsdrPager at tag v0.1.0:
+behaviour. Two runs so far, one per migrated app.
+
+#### First run: rtlsdrPager, Phase 2
+
+**2026-09-04, first run on real hardware**, via rtlsdrPager at tag v0.1.0:
 
 - **Device:** RTL-SDR Blog V4 (`0bda:2838`) on a Galaxy S25 FE, Android 16 / SDK 36,
   arm64-v8a. Android 16 matters: that is the kernel-6.12 platform whose
@@ -390,6 +394,39 @@ runs once per open — each frequency or gain change is a full stop/open cycle, 
 `r82xx_set_gain()` runs fresh every time and the ~10 dB AGC loss never appears. That also
 explains why this app never noticed the bug. The observable test belongs to whichever app
 retunes a live device; check rtlsdr433 in Phase 3.
+
+#### Second run: rtlsdr433, Phase 3
+
+**2026-09-04, same afternoon, same dongle and phone**, via rtlsdr433 at tag v0.3.0 of this
+tree — the first app to exercise it that carries a second GPL tree (`rtl_433`) reaching into
+`rtl-sdr` and `libusb` itself.
+
+| Check | Result |
+| --- | --- |
+| Device opens from the fd | `Opening RTL-SDR via Android USB fd=6`, no `EBC_SDR_ERR_*`, no `LIBUSB_ERROR_*` |
+| Tuner probe | R828D found, `RTL-SDR Blog V4 Detected` — 8 opens across the session, all 8 identical |
+| Tuning | three bands: 315.000, 433.920 and 868.300 MHz |
+| Gain | automatic, and manual 20.0 dB requested → `Tuner gain set to 20.700000 dB` (nearest supported step) |
+| Streaming | 250 kS/s and 1024 kS/s, 262144-byte buffers |
+| End-to-end decode | two inFactory-TH sensors, CRC-checked, 28.8 °C / 45 % and 27.8 °C / 48 %, RSSI −7.7 and −13.1 dBm, SNR 15–19 |
+| **Unplug while running** | ten `cb transfer status: 5, canceling...` (one per URB), then `LIBUSB_ERROR_NOT_FOUND` → `async read failed (-5)`, watchdog timeout 1.6 s later, `android_run_sdr_loop returned 3`, clean teardown. **No SIGSEGV, no tombstone, no ANR — the crash buffer held zero entries for the whole session and the PID was unchanged across the unplug.** |
+| Re-plug | reopened on the first attempt with a fresh `fd=118`, no `LIBUSB_ERROR_BUSY`, 12 decodes afterwards |
+| App restart without device restart | `am force-stop` then relaunch, new PID, opened again and produced 24 decodes |
+| Befund 10, live | `Found Rafael Micro R828D tuner`, `RTL-SDR Blog V4 Detected` and `Exact sample rate is: 250000.000414 Hz` in logcat under the app's own tag `rtl433-sdr` |
+| PLL | no `PLL not locked` on any of the three bands |
+| 16 KB page alignment | `0x4000` on arm64-v8a and x86_64, checked in the packaged APK |
+
+**Befund 5 is not observable in rtlsdr433 either, and the reason is worth recording.** The
+app sets `cfg->frequencies = 1`, so rtl_433's frequency hopping never engages and
+`rtlsdr_set_center_freq()` is called exactly once per open. Changing the band in the UI does
+not retune the running device — the app says so itself ("Stop and start decoding to apply
+it"), and the log confirms one `rtlsdr_set_center_freq` per session.
+
+So **two of the three apps cannot observe the VGA reset by construction**, which retires the
+question this section left open for Phase 3 rather than answering it. The fix stands on the
+register analysis in §3.4: with AGC on, the old code nailed register `0x0c` to 16.3 dB while
+the AGC path sets 26.5 dB. If a live-retune path is ever added to either app — rtl_433's own
+hopping would be enough — the observable comes back with it.
 
 The capture also showed the bridge logging tuner discovery at ERROR level, inherited from
 rtlsdrPager's macro. Fixed afterwards: `aprintf_info()` for progress notes, `aprintf_stderr()`
