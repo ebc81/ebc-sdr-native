@@ -1,0 +1,15 @@
+# Line endings are NOT normalised by Git in this repository - they are already LF
+# on disk and stay LF everywhere. Same reasoning as rtlsdrPager/.gitattributes,
+# but with the opposite starting point.
+#
+# Git for Windows sets core.autocrlf=true by default, which would rewrite every text
+# file to CRLF on checkout. Two things break if that happens:
+#
+#   - rtl-sdr/ and libusb-andro/ are vendored from osmocom/rtl-sdr, rtlsdrblog/rtl-sdr-blog
+#     and libusb, all of which store LF. PROVENANCE.md promises the files are byte-identical
+#     to upstream apart from the documented patches. A CRLF checkout turns "diff against a
+#     fresh upstream clone" into thousands of whitespace hits and hides the real ones.
+#   - the tree has to build on Linux and CI too.
+#
+# `-text` means: store the bytes as they are, hand them back as they are.
+* -text

@@ -1,0 +1,5 @@
+# Upstream clones for analysis only - not part of this tree.
+tmp/
+
+# Internal working notes. Not part of the published source.
+INTERN-*.md
