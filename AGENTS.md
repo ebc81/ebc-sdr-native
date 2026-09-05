@@ -168,7 +168,8 @@ them in place gives duplicate symbols now that `librtlsdr.c` is a real translati
 ## Legal posture
 
 Two licences, kept in separate directories — see [LICENSE.md](LICENSE.md). The tree
-effectively ships under the GPL because `android/` inlines `librtlsdr.c`.
+effectively ships under the GPL because `android/` is built on GPL code moved verbatim out of
+`librtlsdr.c` into `librtlsdr_internal.h`, and links `rtl-sdr/` statically.
 
 This repository is **public** — `github.com/ebc81/ebc-sdr-native` — so for the shared part the
 GPL source requirement is met structurally rather than by a copy step. That is the whole
