@@ -1,12 +1,13 @@
 # Konzept: gemeinsame rtl-sdr-Codebase für alle EBC-Android-Apps
 
 **Erstellt:** 2026-09-03
-**Status:** umgesetzt bis einschließlich Phase 4 (Stand 2026-09-04). Das Repo existiert als
+**Status:** umgesetzt (Stand 2026-09-05). Das Repo existiert als
 `github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.3.0` und sind auf Hardware
 verifiziert; `rtlsdr433` ist als v1.3.3 ausgeliefert, `RTL_SDR_AIS_Driver` als v1.4.0 /
-versionCode 56. **Von Phase 5 fehlt nur noch die AIS-Hälfte** — Stand pro App in
-[AGENTS.md](AGENTS.md) *Legal posture*. Der Text bleibt als Begründung stehen — er ist der
-Grund, warum es so gebaut wurde, nicht bloß ein Plan.
+versionCode 56. **Phase 5 ist in allen drei App-Repos erledigt**; offen ist daran nur noch
+eine Auslieferung, nicht Arbeit — Stand pro App in [AGENTS.md](AGENTS.md) *Legal posture*.
+Der Text bleibt als Begründung stehen — er ist der Grund, warum es so gebaut wurde, nicht
+bloß ein Plan.
 **Grundlage:** [ANALYSE.md](ANALYSE.md)
 
 ---
@@ -230,7 +231,7 @@ AIS hat `minSdk 23`, 433 und Pager `29`. Die gemeinsame Native-Basis muss auf AP
 
 > **Stand:** Phasen 0 bis 4 sind abgearbeitet, in genau dieser Reihenfolge und ohne
 > Abweichung. Was dabei herauskam, steht in [PROVENANCE.md](PROVENANCE.md) §3 bis §5 und in
-> [CHANGELOG.md](CHANGELOG.md). Von Phase 5 ist nur noch die AIS-Hälfte offen; der Stand pro
+> [CHANGELOG.md](CHANGELOG.md). Phase 5 ist in allen drei App-Repos erledigt; der Stand pro
 > App steht an einer einzigen Stelle, in [AGENTS.md](AGENTS.md) *Legal posture*.
 
 **Phase 0 — Union herstellen (in `libs_ebc\`, ohne die Apps anzufassen)** *(erledigt.)*
@@ -259,14 +260,15 @@ versionCode 56 am 2026-09-04.)* Zuletzt, weil dort die meisten Eigenheiten häng
 Kotlin-Layer, und `librtlsdr_andro.c` inkludiert dort zusätzlich Projekt-Header
 (`rtl_ais_andro.h`, `rtlaisjava_err.h`).
 
-**Phase 5 — GPL-Umstellung.** *(größtenteils erledigt.)* Dieses Repo öffentlich machen, die
+**Phase 5 — GPL-Umstellung.** *(erledigt.)* Dieses Repo öffentlich machen, die
 app-seitigen Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzieren und in jeder
 App auf das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
 
-> Dieses Repo ist öffentlich; die app-seitige Hälfte ist bis auf `RTL_SDR_AIS_Driver`
-> erledigt. **Der Stand pro App wird hier bewusst nicht wiederholt** — er steht in
-> [AGENTS.md](AGENTS.md) *Legal posture* und wird dort gepflegt. Dieses Dokument bleibt der
-> Plan und seine Begründung.
+> Dieses Repo ist öffentlich, und die app-seitige Hälfte ist in allen drei Repos geschrieben.
+> Was daran noch offen ist, ist keine Arbeit mehr, sondern eine Auslieferung: die AIS-Texte
+> gehen ohne eigenes Release mit dem nächsten regulären mit. **Der Stand pro App wird hier
+> bewusst nicht wiederholt** — er steht in [AGENTS.md](AGENTS.md) *Legal posture* und wird
+> dort gepflegt. Dieses Dokument bleibt der Plan und seine Begründung.
 
 ---
 

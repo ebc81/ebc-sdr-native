@@ -82,9 +82,11 @@ enumeration. `rtl-sdr/src/librtlsdr_internal.h` now exposes exactly that much, s
 `librtlsdr.c`, add it to `librtlsdr_internal.h` — moved verbatim, with a PROVENANCE.md §3.8
 entry — rather than restructuring `librtlsdr.c`, which must stay close to upstream.
 
-**What is left is Phase 5**, the GPL source paths on the app side. It is largely done and
-only `RTL_SDR_AIS_Driver` is still open — the per-app state is in *Legal posture* below, which
-is the single place this repository tracks it. Nothing in this tree blocks it.
+**Phase 5 is done in all three app repositories** — the GPL source paths on the app side.
+What is left of it is not work but a shipment: the AIS texts are written and wait for the next
+regular release, so the binary in the Play Store still carries the old ones. The per-app state
+is in *Legal posture* below, which is the single place this repository tracks it. Nothing in
+this tree blocks it.
 
 The three migrations are the template for any app that adopts this tree later, in the order
 they happened: `rtlsdrPager` commit `2743190`, `rtlsdr433` commit `7f7d7cb`,
@@ -176,16 +178,16 @@ This repository is **public** — `github.com/ebc81/ebc-sdr-native` — so for t
 GPL source requirement is met structurally rather than by a copy step. That is the whole
 argument for a shared repository over the per-app `-native-gpl` mirrors.
 
-**Phase 5 lives in the app repositories, not here**, and it is mostly done. Each app's source
-path has to name this repository and the tag it pins, and each existing mirror has to shrink to
-the app-specific native code, with the submodule directory excluded from its sync. State on
-2026-09-05, checked in the app repositories:
+**Phase 5 lives in the app repositories, not here**, and in all three it is done. Each app's
+source path has to name this repository and the tag it pins, and each existing mirror has to
+shrink to the app-specific native code, with the submodule directory excluded from its sync.
+State on 2026-09-05, read in the app repositories:
 
 | App | Phase 5 |
 | --- | --- |
 | `rtlsdr433` | **done and shipped.** `NOTICE` names this repository and tag `v0.3.0` with a three-year written offer; `tools/sync-native-gpl.ps1` excludes the submodule with `/XD ebc-sdr-native`; the mirror is synced and shrunk, tagged v1.3.3. |
-| `rtlsdrPager` | **done in the repository, not released.** Same `NOTICE` and the same script. Its mirror deliberately still holds the pre-migration tree, because that is what its shipped binary contains. It completes with the next Pager release. |
-| `RTL_SDR_AIS_Driver` | **open.** It has no mirror and needs none — the app is GPL as a whole, so what it owes is a written offer over the *entire* app source. Its in-app licences page carries an offer already, but scoped to third-party packages, without the three-year term, and without an entry for this repository. |
+| `rtlsdrPager` | **done, not yet on Play.** Same `NOTICE` and the same script. Its mirror was synced and shrunk with v1.1.2 (`23dde9a`) — the written offer names both repositories — and v1.2.0 (`62a4b24`) tags the mirror alongside the app. |
+| `RTL_SDR_AIS_Driver` | **done in the repository, ships with the next release.** It has no mirror and needs none — the app is GPL as a whole, so what it owes is a written offer over the *entire* app source, and `9f9d9c6` widened the offer to exactly that, added the three-year term and an entry for this repository at tag `v0.3.0`, in a new root `NOTICE` and in the in-app page that is the copy a binary recipient actually gets. `92e6028` made the GPLv2 text reachable there at all. Deliberately without a version bump, so the build in the Play Store (56 / 1.4.0) still carries the old page. |
 
 See KONZEPT-GEMEINSAME-CODEBASE.md §2 and §3.4. Fix any of it **from a session opened in that
 app repository**, not from here.
