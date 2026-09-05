@@ -82,8 +82,9 @@ enumeration. `rtl-sdr/src/librtlsdr_internal.h` now exposes exactly that much, s
 `librtlsdr.c`, add it to `librtlsdr_internal.h` — moved verbatim, with a PROVENANCE.md §3.8
 entry — rather than restructuring `librtlsdr.c`, which must stay close to upstream.
 
-**Next: Phase 5**, the GPL source paths on the app side — see *Legal posture* below. Nothing
-in this tree blocks it.
+**What is left is Phase 5**, the GPL source paths on the app side. It is largely done and
+only `RTL_SDR_AIS_Driver` is still open — the per-app state is in *Legal posture* below, which
+is the single place this repository tracks it. Nothing in this tree blocks it.
 
 The three migrations are the template for any app that adopts this tree later, in the order
 they happened: `rtlsdrPager` commit `2743190`, `rtlsdr433` commit `7f7d7cb`,

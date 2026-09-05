@@ -4,9 +4,9 @@
 **Status:** umgesetzt bis einschließlich Phase 4 (Stand 2026-09-04). Das Repo existiert als
 `github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.3.0` und sind auf Hardware
 verifiziert; `rtlsdr433` ist als v1.3.3 ausgeliefert, `RTL_SDR_AIS_Driver` als v1.4.0 /
-versionCode 56. **Von Phase 5 fehlt nur noch die AIS-Hälfte** — 433 ist fertig und
-ausgeliefert, der Pager fertig bis auf seinen Release. Der Text bleibt als Begründung stehen
-— er ist der Grund, warum es so gebaut wurde, nicht bloß ein Plan.
+versionCode 56. **Von Phase 5 fehlt nur noch die AIS-Hälfte** — Stand pro App in
+[AGENTS.md](AGENTS.md) *Legal posture*. Der Text bleibt als Begründung stehen — er ist der
+Grund, warum es so gebaut wurde, nicht bloß ein Plan.
 **Grundlage:** [ANALYSE.md](ANALYSE.md)
 
 ---
@@ -228,9 +228,10 @@ AIS hat `minSdk 23`, 433 und Pager `29`. Die gemeinsame Native-Basis muss auf AP
 
 ## 5. Vorgeschlagene Reihenfolge
 
-> **Stand 2026-09-04:** Phasen 0 bis 4 sind abgearbeitet, in genau dieser Reihenfolge und
-> ohne Abweichung. Was dabei herauskam, steht in [PROVENANCE.md](PROVENANCE.md) §3 bis §5
-> und in [CHANGELOG.md](CHANGELOG.md). Phase 5 ist offen.
+> **Stand:** Phasen 0 bis 4 sind abgearbeitet, in genau dieser Reihenfolge und ohne
+> Abweichung. Was dabei herauskam, steht in [PROVENANCE.md](PROVENANCE.md) §3 bis §5 und in
+> [CHANGELOG.md](CHANGELOG.md). Von Phase 5 ist nur noch die AIS-Hälfte offen; der Stand pro
+> App steht an einer einzigen Stelle, in [AGENTS.md](AGENTS.md) *Legal posture*.
 
 **Phase 0 — Union herstellen (in `libs_ebc\`, ohne die Apps anzufassen)** *(erledigt.)*
 AIS-Baum als Basis nehmen, die vier Rückportierungen aus 433/Pager einarbeiten
@@ -262,15 +263,10 @@ Kotlin-Layer, und `librtlsdr_andro.c` inkludiert dort zusätzlich Projekt-Header
 app-seitigen Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzieren und in jeder
 App auf das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
 
-> **Stand 2026-09-05, in den App-Repos geprüft:** Dieses Repo ist öffentlich. `rtlsdr433` ist
-> fertig und mit v1.3.3 ausgeliefert — `NOTICE` nennt Repo und Tag samt Drei-Jahres-Frist, das
-> Sync-Skript schließt das Submodule mit `/XD ebc-sdr-native` aus, der Mirror ist geschrumpft.
-> `rtlsdrPager` hat dieselben Texte im Repo, ist aber ungetaggt; sein Mirror steht bewusst noch
-> auf dem Vor-Migrations-Stand, weil er zum ausgelieferten Binary passt, und zieht mit dem
-> nächsten Release nach. Offen ist allein `RTL_SDR_AIS_Driver`: als Ganzes GPL, ohne Mirror
-> (und ohne Bedarf für einen), mit einem Written Offer in der App, das noch auf
-> Drittkomponenten zugeschnitten ist, die Drei-Jahres-Frist nicht nennt und `ebc-sdr-native`
-> nicht aufführt.
+> Dieses Repo ist öffentlich; die app-seitige Hälfte ist bis auf `RTL_SDR_AIS_Driver`
+> erledigt. **Der Stand pro App wird hier bewusst nicht wiederholt** — er steht in
+> [AGENTS.md](AGENTS.md) *Legal posture* und wird dort gepflegt. Dieses Dokument bleibt der
+> Plan und seine Begründung.
 
 ---
 

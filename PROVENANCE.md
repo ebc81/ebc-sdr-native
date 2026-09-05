@@ -4,8 +4,8 @@
 **Created:** 2026-09-04 (Phases 0 and 1 of [KONZEPT-GEMEINSAME-CODEBASE.md](KONZEPT-GEMEINSAME-CODEBASE.md))
 **Status:** builds as a static library, `ebc_sdr`. **All three apps use it**, each pinning tag
 `v0.3.0` as a submodule, and each verified on a Blog V4 (§5). Phases 0 to 4 are done. Phase 5
-(the GPL source paths on the app side) is done in `rtlsdr433`, done but unreleased in
-`rtlsdrPager`, and open in `RTL_SDR_AIS_Driver` — none of it is work in this repository.
+is the GPL source paths on the app side and is no work in this repository; its per-app state is
+tracked in one place, [AGENTS.md](AGENTS.md) *Legal posture*.
 
 This file is the contract: **every byte that differs from upstream is listed here with a
 reason.** If you change a vendored file, add the entry in the same commit. `git log` and this
