@@ -399,7 +399,8 @@ llvm-readelf -l libconsumer.so | grep '^  LOAD'                      # align 0x4
 ### Hardware verification
 
 A green build proves very little here; the differences between the variants sit in hardware
-behaviour. Three runs, one per migrated app — same dongle and same phone throughout.
+behaviour. Four runs — one per migrated app for the Phase 2-4 migration, plus one for the
+v0.4.0 unplug fix — same dongle and same phone throughout.
 
 #### First run: rtlsdrPager, Phase 2
 
@@ -501,6 +502,43 @@ app in this family can currently show it in a log.
 This run closed Phase 4. `RTL_SDR_AIS_Driver` released from it as v1.4.0 / versionCode 56 on
 2026-09-04, so all three apps now ship the same shared base at the same tag — the state this
 repository was built for.
+
+#### Fourth run: rtlsdr433, v0.4.0
+
+**2026-09-12, same dongle and phone**, via rtlsdr433 at app version 1.3.4 / versionCode 34.
+This run exists because **v0.4.0 was tagged with its hardware test still outstanding** — the
+commit message says so in as many words. §3.9 changed the unplug path itself, so a green build
+proved even less than usual here.
+
+- **Device:** RTL-SDR Blog V4 (`0bda:2838`, R828D) on a Galaxy S25 FE (`SM-S731B`),
+  Android 16, arm64-v8a. adb over Wi-Fi, so the USB-C port was free for the dongle.
+
+| Check | Result |
+| --- | --- |
+| Device opens from the fd | four opens (`fd` 139, 129, 118, 139), no `EBC_SDR_ERR_*`, no `LIBUSB_ERROR_*` at open |
+| Tuner probe | `Found Rafael Micro R828D tuner` on every open |
+| Tuning | three bands: 315.000, 433.920 and 868.300 MHz |
+| Gain | automatic, and manual 20.0 dB requested → `Tuner gain set to 20.700000 dB` (nearest step) |
+| Streaming | 250 kS/s, 262144-byte buffers, `Exact sample rate is: 250000.000414 Hz` |
+| End-to-end decode | three sensors at 433.92 MHz — Nexus-TH ID 84 at 24.0 °C / 45 %, inFactory-TH ID 145 at 22.3 °C / 51 %, and a third; RSSI −8.9 to −12.9 dBm |
+| **Unplug while running** | thirteen `cb transfer status: 5, canceling...`, then `LIBUSB_ERROR_NOT_FOUND` → `rtlsdr_read_async done` → `async read failed (-5)`, watchdog timeout 1.9 s later, `android_run_sdr_loop returned 3`, clean teardown. **No abort, no `HandleUsingDestroyedMutex`, no `__fortify_fatal`, no tombstone; the crash buffer held zero entries for the whole session and the PID was unchanged across the unplug.** |
+| Re-plug | reopened on the first attempt with a fresh `fd=118`, **in the same app process** — so the previous unplug left no unusable libusb or rtlsdr state behind |
+| App restart without device restart | `am force-stop` then relaunch, new PID, opened again and decoded three sensors |
+| **The §3.9 leak path** | never taken — neither `leaking transfers and buffers` nor `async status still` appeared. The bounded drain reaped every transfer, which is the intended outcome rather than the fallback |
+
+**What this run does and does not show.** It shows the v0.4.0 teardown is clean on this
+hardware and that the app survives an unplug that previously ended in
+`abort <- __fortify_fatal <- HandleUsingDestroyedMutex <- ... <- libusb_close`. It does **not**
+show the reported crash being triggered and then survived: that report came from a Redmi A3x
+via the Play Console, and no such device was available. The timing window §3.9 describes is
+device-dependent, and the S25 FE did not enter it even on v0.3.0 during the 2026-09-04 run.
+
+The app side of the same release added two pieces of hardening in its own vendored
+`rtl433/src/sdr.c` — a negated `pthread_create()` errno and a `thread_valid` guard before
+`pthread_join()`. Those are rtlsdr433's, not this tree's, and are recorded in that
+repository's `AGENTS.md`; they are mentioned here only because the log lines they produce
+(`No acquire thread to stop.`) appear in the capture above.
+
 
 ---
 
