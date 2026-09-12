@@ -6,6 +6,69 @@ the dongle does.
 
 Details and reasoning for every item: [PROVENANCE.md](PROVENANCE.md).
 
+## v0.4.0 — no free of in-flight USB transfers on unplug (2026-09-12)
+
+Bug-fix release for a confirmed Google Play crash. **Not yet hardware-verified** — the one
+test that matters is an unplug while streaming, and it has not been run on a dongle yet. No
+public API change, but the private `struct rtlsdr_dev` gained a field, so every app re-pins
+and rebuilds.
+
+### Fixed
+
+- **Abort on unplug while streaming (severity high).** `abort` <- `__fortify_fatal` <-
+  `HandleUsingDestroyedMutex` <- `pthread_mutex_lock` <- `do_close` <- `libusb_close` <-
+  `rtlsdr_close`, reported from a Redmi A3x / Android 16 running `eu.ebctech.rtlsdr433andro`.
+  `rtlsdr_read_async()` cancelled its transfers, handled events **once with a zero timeout**
+  and then freed every one of them — including the ones libusb had not reaped yet.
+  `libusb_free_transfer()` destroys the transfer's mutex and frees a struct that is still
+  linked on libusb's in-flight list, and the buffer freed alongside it can still be a live
+  DMA target. `libusb_close()` walks that list afterwards and locks the destroyed mutex.
+
+  The transfers are drained first now — re-cancelled and reaped with a real 10 ms timeout,
+  for at most 1 s — and if the drain does not finish, **nothing is freed at all**: the
+  transfers and buffers are leaked on purpose, logged loudly to logcat, and left to
+  `libusb_close()`, which unlinks them safely. Freeing them is the one thing that cannot be
+  made safe. Both upstreams have the identical defect — PROVENANCE.md section 7.
+
+  **Hardware behaviour:** none while streaming. On unplug, teardown may now take up to a
+  second longer before the app is told the device is gone.
+
+- **`rtlsdr_close()` waits for the async run even when the device was lost**, bounded at 2 s
+  instead of upstream's unbounded spin. Upstream's single `!dev_lost` gate skipped the wait
+  in exactly the case where the other thread is still unwinding.
+  `rtlsdr_deinit_baseband()` stays gated on `!dev_lost` — it needs USB control transfers.
+  `rtlsdr_close()` now also cancels a still-running async read itself, so a caller that
+  forgot to stop no longer has the device closed underneath it. This is what
+  `RTL_SDR_AIS_Driver`'s `rtl_ais_forceclose()` needs: it closes from the JNI thread while
+  the session thread can still be inside `rtlsdr_read_async()`.
+
+- **An unplug no longer leaves `async_status` at `RTLSDR_CANCELING` for good.** It was
+  invisible only because `rtlsdr_close()` used to skip its wait on a lost device; it also
+  made `rtlsdr_cancel_async_save()` in the bridge run out its full 1 s on every unplug.
+
+### Internal
+
+- `struct rtlsdr_dev` gained `int xfer_outstanding` — how many transfers libusb has in
+  flight — maintained at the two submit sites and in `_libusb_callback()`. Plain `int` on
+  purpose; the reasoning, and the one-line upgrade to atomics should an app ever retune a
+  live device from a second thread, are in PROVENANCE.md section 3.9.
+- A transfer is no longer re-armed from the callback once `async_status` has left
+  `RTLSDR_RUNNING`. In steady state nothing changes; at teardown it means the drain cannot
+  be outrun by a URB that keeps resubmitting itself.
+
+### Verified
+
+- 32 configurations built with **0 errors and 0 warnings**: 4 ABIs x API {23, 29} x
+  {Debug, RelWithDebInfo} x `EBC_SDR_CONVENIENCE` {OFF, ON}, NDK r29 (`29.0.14206865`),
+  against the consumer harness of PROVENANCE.md section 5.
+- LF sweep clean; `grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` = 30 markers
+  across 11 files, matching PROVENANCE.md section 3.7.
+- **Open:** the hardware unplug run. Expect no `leaking transfers and buffers` line in
+  logcat on a healthy teardown — if it appears, the drain is too short or a transfer is
+  stuck, and that is the finding to chase.
+
+---
+
 ## v0.3.0 — PPM search removed (2026-09-04)
 
 **The tag all three apps pin today:** `rtlsdrPager`, `rtlsdr433` (released as v1.3.3) and

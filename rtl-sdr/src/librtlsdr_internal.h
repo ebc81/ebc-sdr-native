@@ -125,6 +125,15 @@ struct rtlsdr_dev {
 	enum rtlsdr_async_status async_status;
 	int async_cancel;
 	int use_zerocopy;
+	/* __EBCANDROID__: not upstream. How many transfers libusb currently has in
+	 * flight for this device -- incremented after every successful
+	 * libusb_submit_transfer(), decremented at the top of _libusb_callback(),
+	 * which libusb calls exactly once per submission and only after the transfer
+	 * has left ctx->flying_transfers. rtlsdr_read_async() must not free a transfer
+	 * while this is non-zero; see PROVENANCE.md 3.9. Plain int like dev_lost and
+	 * async_cancel beside it: submit and callback both run on the thread inside
+	 * rtlsdr_read_async(). */
+	int xfer_outstanding;
 	/* rtl demod context */
 	uint32_t rate; /* Hz */
 	uint32_t rtl_xtal; /* Hz */

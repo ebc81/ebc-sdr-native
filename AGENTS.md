@@ -27,7 +27,7 @@ a bug in PROVENANCE.md, not something to shrug at.
 
 - Change a vendored file → add or update the §3 entry **in the same commit**.
 - Mark the site in the code with an `__EBCANDROID__` comment so `grep -rn __EBCANDROID__`
-  finds every local deviation — 17 markers across 11 files today. In this tree that marker is
+  finds every local deviation — 30 markers across 11 files today. In this tree that marker is
   a *comment convention*, not a compile guard, and Phase 1 decided to keep it that way: the
   library is Android-only, so there is no non-Android branch to select. (rtlsdrPager does use
   it as a real define, `-D__EBCANDROID__=1`, for its `multimon/` tree.) The one place that

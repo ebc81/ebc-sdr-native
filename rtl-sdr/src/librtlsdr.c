@@ -1664,25 +1664,47 @@ err:
 
 int rtlsdr_close(rtlsdr_dev_t *dev)
 {
+	/* __EBCANDROID__: bound for the wait below, in milliseconds. */
+	int wait_ms = 2000;
+
 	if (!dev)
 		return -1;
 
-	//ebc
+	/* __EBCANDROID__: if the caller forgot to stop the stream, ask for it now, so
+	 * close() is self-sufficient instead of pulling the device out from under a
+	 * running rtlsdr_read_async(). */
+	if (RTLSDR_RUNNING == dev->async_status)
+		rtlsdr_cancel_async(dev);
+
+	/* __EBCANDROID__: wake a blocked libusb_handle_events_timeout_completed() so
+	 * the thread inside rtlsdr_read_async() notices the cancel. */
 	if ( dev->ctx != NULL)
 		libusb_interrupt_event_handler(dev->ctx);
 
-	if(!dev->dev_lost) {
-		/* block until all async operations have been completed (if any) */
-		while (RTLSDR_INACTIVE != dev->async_status) {
+	/* block until all async operations have been completed (if any) */
+	/* __EBCANDROID__: two changes against upstream. The wait now happens even when
+	 * dev->dev_lost is set -- upstream gated it on !dev_lost, i.e. it skipped the
+	 * wait in exactly the unplug case, the one where the acquire thread is still
+	 * inside rtlsdr_read_async() cancelling and draining, and libusb_close() below
+	 * would then walk ctx->flying_transfers while that thread was still working on
+	 * it. And the wait is bounded, because a lost device may never reach
+	 * RTLSDR_INACTIVE and upstream's loop would hang the caller for good.
+	 * rtlsdr_deinit_baseband() stays gated on !dev_lost: it issues USB control
+	 * transfers, which cannot succeed on a device that is gone. */
+	while (RTLSDR_INACTIVE != dev->async_status && wait_ms-- > 0) {
 #ifdef _WIN32
-			Sleep(1);
+		Sleep(1);
 #else
-			usleep(1000);
+		usleep(1000);
 #endif
-		}
-
-		rtlsdr_deinit_baseband(dev);
 	}
+
+	if (RTLSDR_INACTIVE != dev->async_status)
+		fprintf(stderr, "rtlsdr_close: async status still %d after the wait, "
+				"closing anyway\n", (int)dev->async_status);
+
+	if (!dev->dev_lost)
+		rtlsdr_deinit_baseband(dev);
 	if (dev->devh ) {
 		libusb_release_interface(dev->devh, 0);
 	}
@@ -1731,6 +1753,11 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 {
 	rtlsdr_dev_t *dev = (rtlsdr_dev_t *)xfer->user_data;
 
+	/* __EBCANDROID__: libusb calls this exactly once per submission, after the
+	 * transfer has been taken off ctx->flying_transfers -- whatever its status, it
+	 * is out of flight right now. Only a successful resubmit below puts it back. */
+	dev->xfer_outstanding--;
+
 	if (LIBUSB_TRANSFER_COMPLETED == xfer->status) {
 		if (dev->cb)
 			dev->cb(xfer->buffer, xfer->actual_length, dev->cb_ctx);
@@ -1741,9 +1768,17 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 		 * extra libusb_unref_device calls (refcount underflow) and a crash
 		 * inside usbi_handle_transfer_completion when MTE detected the
 		 * use-after-free of the freed libusb_device struct. */
-		if (libusb_submit_transfer(xfer) != LIBUSB_SUCCESS) {
-			dev->dev_lost = 1;
-			rtlsdr_cancel_async(dev);
+		/* __EBCANDROID__: do not re-arm a transfer once the run is winding down.
+		 * Otherwise the drain at the end of rtlsdr_read_async() has to chase a URB
+		 * that keeps resubmitting itself and has no guaranteed end. The samples
+		 * already in hand still went to dev->cb above. */
+		if (RTLSDR_RUNNING == dev->async_status) {
+			if (libusb_submit_transfer(xfer) != LIBUSB_SUCCESS) {
+				dev->dev_lost = 1;
+				rtlsdr_cancel_async(dev);
+			} else {
+				dev->xfer_outstanding++;
+			}
 		}
 		dev->xfer_errors = 0;
 	} else if (LIBUSB_TRANSFER_CANCELLED != xfer->status) {
@@ -1854,6 +1889,25 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 	if (!dev)
 		return -1;
 
+	/* __EBCANDROID__: never free a transfer libusb still has in flight, and never
+	 * free a buffer the kernel may still write a URB into. If the drain in
+	 * rtlsdr_read_async() could not bring xfer_outstanding to zero, drop the
+	 * pointers and leak on purpose: libusb_close() unlinks what is left of the
+	 * flying list safely and says so, whereas freeing here destroys
+	 * itransfer->lock and aborts the process in HandleUsingDestroyedMutex.
+	 * A few MB lost once, at the end of a device's life, beats a crash -- the next
+	 * rtlsdr_read_async() allocates a fresh set. Tested != 0, not > 0, so that any
+	 * accounting anomaly also lands on the safe path. See PROVENANCE.md 3.9. */
+	if (dev->xfer_outstanding != 0) {
+		fprintf(stderr, "rtlsdr: %d of %u transfers still in flight after "
+				"cancel -- leaking transfers and buffers instead of "
+				"freeing memory libusb still owns\n",
+				dev->xfer_outstanding, dev->xfer_buf_num);
+		dev->xfer = NULL;
+		dev->xfer_buf = NULL;
+		return -2;
+	}
+
 	if (dev->xfer) {
 		for(i = 0; i < dev->xfer_buf_num; ++i) {
 			if (dev->xfer[i]) {
@@ -1895,6 +1949,12 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 	struct timeval tv = { 1, 0 };
 	struct timeval zerotv = { 0, 0 };
 	enum rtlsdr_async_status next_status = RTLSDR_INACTIVE;
+	/* __EBCANDROID__: bounded drain before the buffers are freed, see below.
+	 * 10 ms per pass, at most 100 passes. drain_r is kept apart from r so the
+	 * drain cannot overwrite the value this function returns to the app. */
+	struct timeval draintv = { 0, 10000 };
+	int drain_tries = 100;
+	int drain_r = 0;
 
 	if (!dev)
 		return -1;
@@ -1904,6 +1964,9 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 
 	dev->async_status = RTLSDR_RUNNING;
 	dev->async_cancel = 0;
+	/* __EBCANDROID__: nothing is in flight yet. Also clears a stale non-zero left
+	 * behind by a previous run that had to leak its transfers. */
+	dev->xfer_outstanding = 0;
 
 	dev->cb = cb;
 	dev->cb_ctx = ctx;
@@ -1941,6 +2004,8 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 			dev->async_status = RTLSDR_CANCELING;
 			break;
 		}
+		/* __EBCANDROID__: on ctx->flying_transfers now. */
+		dev->xfer_outstanding++;
 	}
 
 	while (RTLSDR_INACTIVE != dev->async_status) {
@@ -1992,6 +2057,44 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 			}
 		}
 	}
+
+	/* __EBCANDROID__: both exits from the loop above can leave transfers on
+	 * ctx->flying_transfers -- the dev_lost break and the break after a failed
+	 * libusb_handle_events_timeout_completed(). The cancel branch only ever handles
+	 * events with a ZERO timeout, so a cancellation libusb has scheduled but not
+	 * yet reaped is still pending, and BULK_TIMEOUT is 0, so nothing expires by
+	 * itself. _rtlsdr_free_async_buffers() would then libusb_free_transfer() a live
+	 * transfer -- illegal per libusb's own API docs: it destroys itransfer->lock
+	 * and frees a struct that is still linked -- and free() a buffer that may still
+	 * be a DMA target. libusb_close() -> do_close() walks that list afterwards and
+	 * locks the destroyed mutex: __fortify_fatal -> HandleUsingDestroyedMutex ->
+	 * abort, the Play Console crash on Android 16. So reap what is left first, with
+	 * a real timeout so the callbacks actually run. Both upstreams share the
+	 * defect; see PROVENANCE.md 3.9 and 7. */
+	while (dev->xfer && dev->xfer_outstanding != 0 && drain_tries-- > 0) {
+		for (i = 0; i < dev->xfer_buf_num; ++i) {
+			if (!dev->xfer[i])
+				continue;
+
+			if (LIBUSB_TRANSFER_CANCELLED != dev->xfer[i]->status)
+				libusb_cancel_transfer(dev->xfer[i]);
+		}
+
+		drain_r = libusb_handle_events_timeout_completed(dev->ctx,
+								&draintv, NULL);
+		if (drain_r < 0 && drain_r != LIBUSB_ERROR_INTERRUPTED)
+			break;
+	}
+
+	/* __EBCANDROID__: the event loop has left and nothing is in flight, so the run
+	 * really is over -- say so. Upstream writes next_status back, and on an unplug
+	 * that is RTLSDR_CANCELING (set for every transfer the cancel branch just
+	 * cancelled, right before the dev_lost break), so async_status would stay
+	 * CANCELING for good and every bounded wait for RTLSDR_INACTIVE -- in
+	 * rtlsdr_close() and in the bridge's rtlsdr_cancel_async_save() -- would burn
+	 * its full timeout on every unplug. */
+	if (dev->xfer_outstanding == 0)
+		next_status = RTLSDR_INACTIVE;
 
 	_rtlsdr_free_async_buffers(dev);
 

@@ -185,7 +185,7 @@ the library is Android-only, so there is no non-Android branch to select. Defini
 branch on the platform is `ebc_log.h`, and it uses the NDK's own `__ANDROID__` so the tree
 still preprocesses on a host for analysis.
 
-`grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` currently finds 17 markers across
+`grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` currently finds 30 markers across
 11 files. Every local deviation should have one.
 
 ---
@@ -228,6 +228,33 @@ Six files include it: `librtlsdr.c` (36 calls), `convenience.c` (32), `tuner_r82
 matters — none of them is exported from the linked `.so`, because the target sets
 `-fvisibility=hidden` while `RTLSDR_API` marks the public API `visibility("default")`
 explicitly (§5).
+
+---
+
+### 3.9 v0.4.0 — the unplug crash in `rtlsdr_read_async()`
+
+| # | Finding | Severity | Commit | What changed |
+| --- | --- | --- | --- | --- |
+| P12 | `rtlsdr_read_async()` freed USB transfers that libusb still had in flight | **high** | `v0.4.0` | Google Play crash on a Redmi A3x / Android 16 in `eu.ebctech.rtlsdr433andro`: `abort <- __fortify_fatal <- HandleUsingDestroyedMutex <- pthread_mutex_lock <- do_close <- libusb_close <- rtlsdr_close <- sdr_close <- r_free_cfg <- rtl433_start`. On unplug the cancel branch of the async loop handles events **once with a zero timeout** and breaks, so a cancellation libusb has scheduled but not yet reaped is still on `ctx->flying_transfers` — `BULK_TIMEOUT` is 0, nothing expires by itself. `_rtlsdr_free_async_buffers()` then called `libusb_free_transfer()` on them, which is `usbi_mutex_destroy()` plus `free()` on a struct that is still linked (explicitly illegal per libusb's own API docs), and `free()`d their buffers while a URB could still be written into them. `libusb_close()` walks that list afterwards and locks the destroyed mutex. Fix: a new `xfer_outstanding` counter in `struct rtlsdr_dev`, a bounded drain (at most 100 passes of 10 ms) that re-cancels and handles events with a *real* timeout before the free, and a refusal to free anything while the counter is non-zero — those transfers and buffers are leaked on purpose and `libusb_close()` unlinks them safely. Transfers are also no longer re-armed from the callback once `async_status` has left `RTLSDR_RUNNING`, so the drain cannot be outrun by a URB that keeps resubmitting itself. **Both upstreams have the identical defect; see [section 7](#7-candidates-for-an-upstream-patch).** |
+| P13 | `rtlsdr_read_async()` left `async_status` at `RTLSDR_CANCELING` after an unplug | low | `v0.4.0` | The `dev_lost` break at the end of the cancel branch carries `next_status == RTLSDR_CANCELING`, set for every transfer that branch had just cancelled, and that is what gets written back. A lost device therefore never reached `RTLSDR_INACTIVE`. Harmless only because `rtlsdr_close()` used to skip its wait on `dev_lost`; with P14 it would have cost the full timeout on *every* unplug, and it already made `rtlsdr_cancel_async_save()` in the bridge run out its own 1 s. `next_status` is now set to `RTLSDR_INACTIVE` once the drain confirms nothing is in flight. |
+| P14 | `rtlsdr_close()` did not wait for the async run when the device was lost | medium | `v0.4.0` | Upstream's single `if(!dev->dev_lost)` gated **both** the "block until all async operations have been completed" loop and `rtlsdr_deinit_baseband()`. The two are separate now: the wait always happens, but is **bounded** at 2 s, and `rtlsdr_deinit_baseband()` stays gated on `!dev_lost` because it issues USB control transfers that cannot succeed on a device that is gone. Upstream skipped the wait in exactly the unplug case — the one where the acquire thread is still inside `rtlsdr_read_async()` — and where it did wait, the loop was unbounded and could hang the caller for good. `rtlsdr_close()` now also calls `rtlsdr_cancel_async()` itself when `async_status == RTLSDR_RUNNING`, so a caller that forgot to stop no longer has the device closed underneath it. The `//ebc` comment above `libusb_interrupt_event_handler()` — a deviation that had been carried without a marker, i.e. a bug in this file — is now a proper `__EBCANDROID__` comment and is covered here. |
+
+`xfer_outstanding` is a plain `int`, like `dev_lost`, `async_cancel` and `xfer_errors` beside
+it. The submit site and `_libusb_callback()` both run on the thread inside
+`rtlsdr_read_async()`, and libusb dispatches transfer callbacks only from the thread holding
+the event lock. The one cross-thread path that exists in principle — `libusb_control_transfer()`
+runs the event loop on its *calling* thread, so an app that retunes a **live** device from a
+second thread could have the callback dispatched there — is not taken by any of the three
+apps: every `rtlsdr_set_*` runs once per open, before streaming ([section 5](#5-verification)).
+If one ever does, the three `++`/`--` sites become
+`__atomic_fetch_add/sub(..., __ATOMIC_RELAXED)`; `volatile` would not help, because the hazard
+is the read-modify-write and not visibility.
+
+Why leaking is the right failure mode when the drain does not finish: `do_close()` only reads
+and unlinks the flying list, and says so (`Device handle closed while transfer was still being
+processed`). Freeing is the one thing that cannot be made safe. The cost is bounded and
+one-off — at most `xfer_buf_num` transfers plus their buffers, a few MB, at the end of a
+device's life — and the next `rtlsdr_read_async()` allocates a fresh set.
 
 ---
 
@@ -601,6 +628,8 @@ in neither upstream:
 | osmocom + Blog | Befund 4 — `set_gain_by_perc()` in `convenience.c` indexes a zero-byte allocation on tuners without a gain table. |
 | osmocom + Blog | Befund 8 — NULL guard in `rtlsdr_set_direct_sampling()`. |
 | osmocom + Blog | The resubmit return-value check in the transfer callback, which fixes the Android 16 / kernel 6.12 crash on unplug. Present in all three EBC apps, in neither upstream. |
+| osmocom + Blog | `rtlsdr_read_async()` frees transfers libusb still has in flight. The cancel branch handles events with a **zero** timeout and breaks when `dev_lost` is set, then `_rtlsdr_free_async_buffers()` calls `libusb_free_transfer()` unconditionally — destroying `itransfer->lock` and freeing a struct that is still linked on `ctx->flying_transfers`, and freeing buffers a URB may still be written into. `libusb_close()` then locks the destroyed mutex and bionic aborts. Needs a bounded drain before the free, and no free at all while transfers are outstanding. EBC fix: 3.9 / P12. |
+| osmocom + Blog | `rtlsdr_close()` gates the "block until all async operations have been completed" loop on `!dev_lost`, so it does not wait in the one case where the other thread is certainly still busy; and where it does wait, the loop is unbounded. EBC fix: 3.9 / P14. |
 | Blog | The four `rtlsdr_set_i2c_repeater(dev, 0)` calls the fork commented out. Both EBC variants had already reverted that. |
 
 ---
