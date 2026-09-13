@@ -1,14 +1,19 @@
 # Konzept: gemeinsame rtl-sdr-Codebase für alle EBC-Android-Apps
 
 **Erstellt:** 2026-09-03
-**Status:** umgesetzt (Stand 2026-09-05). Das Repo existiert als
-`github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.3.0` und sind auf Hardware
-verifiziert; `rtlsdr433` ist als v1.3.3 ausgeliefert, `RTL_SDR_AIS_Driver` als v1.4.0 /
-versionCode 56. **Phase 5 ist in allen drei App-Repos erledigt**; offen ist daran nur noch
-eine Auslieferung, nicht Arbeit — Stand pro App in [AGENTS.md](AGENTS.md) *Legal posture*.
-Der Text bleibt als Begründung stehen — er ist der Grund, warum es so gebaut wurde, nicht
-bloß ein Plan.
+**Status:** umgesetzt (Stand 2026-09-13). Das Repo existiert als
+`github.com/ebc81/ebc-sdr-native`, alle drei Apps pinnen Tag `v0.4.0` und sind aus diesem Pin
+heraus einzeln auf Hardware verifiziert; ausgeliefert als `rtlsdrPager` v1.5.1, `rtlsdr433`
+v1.3.4 und `RTL_SDR_AIS_Driver` v1.4.1 / versionCode 57 (aktuell v1.4.2 / 58). **Phase 5 ist
+in allen drei App-Repos erledigt und inzwischen auch ausgeliefert** — Stand pro App in
+[AGENTS.md](AGENTS.md) *Legal posture*.
 **Grundlage:** [ANALYSE.md](ANALYSE.md)
+
+Damit ist der Schritt getan, an dem sich dieses Konzept messen lassen muss: der Sprung
+`v0.3.0` → `v0.4.0` hat alle drei Apps bewegt, jede mit eigenem Hardware-Lauf und eigenem
+Release, und dabei musste nichts dupliziert und nichts abgezweigt werden. Genau das war der
+Zweck. Der Text bleibt als Begründung stehen — er ist der Grund, warum es so gebaut wurde,
+nicht bloß ein Plan.
 
 ---
 
@@ -229,10 +234,11 @@ AIS hat `minSdk 23`, 433 und Pager `29`. Die gemeinsame Native-Basis muss auf AP
 
 ## 5. Vorgeschlagene Reihenfolge
 
-> **Stand:** Phasen 0 bis 4 sind abgearbeitet, in genau dieser Reihenfolge und ohne
+> **Stand:** Phasen 0 bis 5 sind abgearbeitet, in genau dieser Reihenfolge und ohne
 > Abweichung. Was dabei herauskam, steht in [PROVENANCE.md](PROVENANCE.md) §3 bis §5 und in
-> [CHANGELOG.md](CHANGELOG.md). Phase 5 ist in allen drei App-Repos erledigt; der Stand pro
-> App steht an einer einzigen Stelle, in [AGENTS.md](AGENTS.md) *Legal posture*.
+> [CHANGELOG.md](CHANGELOG.md). Phase 5 ist in allen drei App-Repos erledigt **und
+> ausgeliefert**; der Stand pro App steht an einer einzigen Stelle, in
+> [AGENTS.md](AGENTS.md) *Legal posture*.
 
 **Phase 0 — Union herstellen (in `libs_ebc\`, ohne die Apps anzufassen)** *(erledigt.)*
 AIS-Baum als Basis nehmen, die vier Rückportierungen aus 433/Pager einarbeiten
@@ -265,10 +271,12 @@ app-seitigen Quelltext-Veröffentlichungen auf den app-spezifischen Teil reduzie
 App auf das hier gepinnte Tag verweisen. Die app-seitigen Details gehören zur jeweiligen App.
 
 > Dieses Repo ist öffentlich, und die app-seitige Hälfte ist in allen drei Repos geschrieben.
-> Was daran noch offen ist, ist keine Arbeit mehr, sondern eine Auslieferung: die AIS-Texte
-> gehen ohne eigenes Release mit dem nächsten regulären mit. **Der Stand pro App wird hier
-> bewusst nicht wiederholt** — er steht in [AGENTS.md](AGENTS.md) *Legal posture* und wird
-> dort gepflegt. Dieses Dokument bleibt der Plan und seine Begründung.
+> Die letzte Lücke war keine Arbeit mehr, sondern eine Auslieferung: die AIS-Texte lagen im
+> Repo, aber in keinem Binary. Sie sind mit **v1.4.1 / versionCode 57** ohne eigenes Release
+> mit dem nächsten regulären mitgegangen und stehen im Play Store. Phase 5 ist damit nicht
+> nur erledigt, sondern beim Empfänger angekommen. **Der Stand pro App wird hier bewusst
+> nicht wiederholt** — er steht in [AGENTS.md](AGENTS.md) *Legal posture* und wird dort
+> gepflegt. Dieses Dokument bleibt der Plan und seine Begründung.
 
 ---
 

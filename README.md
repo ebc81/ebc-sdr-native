@@ -5,7 +5,8 @@ Shared native SDR base for the EBC Android SDR apps: vendored [osmocom/rtl-sdr][
 enumeration. It builds as one static library target, `ebc_sdr`.
 
 Three apps use it, each pinning the same tag as a git submodule: `RTL_SDR_AIS_Driver`,
-`rtlsdr433` and `rtlsdrPager`.
+`rtlsdr433` and `rtlsdrPager`. **The current tag is `v0.4.0`, and all three pin it**, shipped
+as v1.4.1, v1.3.4 and v1.5.1 — each verified on real hardware from that pin.
 
 [osmo]: https://github.com/osmocom/rtl-sdr
 [libusb]: https://github.com/libusb/libusb

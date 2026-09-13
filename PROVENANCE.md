@@ -3,9 +3,10 @@
 **Tree:** shared native SDR base for the EBC Android apps (working title `ebc-sdr-native`)
 **Created:** 2026-09-04 (Phases 0 and 1 of [KONZEPT-GEMEINSAME-CODEBASE.md](KONZEPT-GEMEINSAME-CODEBASE.md))
 **Status:** builds as a static library, `ebc_sdr`. **All three apps use it**, each pinning tag
-`v0.3.0` as a submodule, and each verified on a Blog V4 (§5). Phases 0 to 4 are done. Phase 5
-is the GPL source paths on the app side and is no work in this repository; its per-app state is
-tracked in one place, [AGENTS.md](AGENTS.md) *Legal posture*.
+`v0.4.0` as a submodule, and each verified on a Blog V4 from that pin (§5, runs four to six).
+Phases 0 to 5 are done. Phase 5 is the GPL source paths on the app side, is no work in this
+repository, and has now shipped in all three apps; its per-app state is tracked in one place,
+[AGENTS.md](AGENTS.md) *Legal posture*.
 
 This file is the contract: **every byte that differs from upstream is listed here with a
 reason.** If you change a vendored file, add the entry in the same commit. `git log` and this
@@ -293,11 +294,16 @@ in libc.
 
 ### What each app had to do — Phases 2 to 4
 
-**All three are migrated and all three pin tag `v0.3.0`:** `rtlsdrPager` (Phase 2, commit
-`2743190`), `rtlsdr433` (Phase 3, commit `7f7d7cb`, released as v1.3.3) and
-`RTL_SDR_AIS_Driver` (Phase 4, commit `4ce3a9d`, released as v1.4.0 / versionCode 56 on
-2026-09-04). The list below is kept as the record of what each migration involved — and as
-the checklist for any app that adopts this tree later.
+**All three are migrated and all three pin tag `v0.4.0`:** `rtlsdrPager` (Phase 2, commit
+`2743190`, now at v1.5.1), `rtlsdr433` (Phase 3, commit `7f7d7cb`, now at v1.3.4) and
+`RTL_SDR_AIS_Driver` (Phase 4, commit `4ce3a9d`, now at v1.4.1 / versionCode 57, current
+v1.4.2 / 58).
+
+Those commits are the *migrations*, and each app entered the tree at `v0.3.0` — released as
+v1.3.3 and as v1.4.0 / versionCode 56 on 2026-09-04. The move to `v0.4.0` was a later pin bump
+in each app, with its own hardware run (§5, runs four to six) and its own release; it changed
+nothing in the list below, because §3.9 added no public API. The list is kept as the record of
+what each migration involved — and as the checklist for any app that adopts this tree later.
 
 1. **Map the error codes at the JNI boundary.** The library returns `EBC_SDR_ERR_LIBUSB_INIT`
    (-2001) and `EBC_SDR_ERR_CLAIM` (-2002), or a raw `LIBUSB_ERROR_*`. AIS's Java contract
@@ -500,8 +506,9 @@ apps**, not two — the VGA-reset fix rests entirely on the register analysis in
 app in this family can currently show it in a log.
 
 This run closed Phase 4. `RTL_SDR_AIS_Driver` released from it as v1.4.0 / versionCode 56 on
-2026-09-04, so all three apps now ship the same shared base at the same tag — the state this
-repository was built for.
+2026-09-04, so from that day all three apps shipped the same shared base at the same tag,
+`v0.3.0` — the state this repository was built for. The three runs below are the first time
+that state was moved as a unit, to `v0.4.0`.
 
 #### Fourth run: rtlsdr433, v0.4.0
 
@@ -538,6 +545,83 @@ The app side of the same release added two pieces of hardening in its own vendor
 `pthread_join()`. Those are rtlsdr433's, not this tree's, and are recorded in that
 repository's `AGENTS.md`; they are mentioned here only because the log lines they produce
 (`No acquire thread to stop.`) appear in the capture above.
+
+#### Fifth run: rtlsdrPager, v0.4.0
+
+**2026-09-13, same dongle and phone**, via rtlsdrPager at v1.5.1. Deliberately shorter than the
+others, and the reasoning is the point: that app ties a pin bump to its R82xx tests — level, DC
+blocker, deliberate mistune — because the differences between the old per-app copies and this
+tree sat in tuner behaviour. §3.9 touches `librtlsdr.c` and `librtlsdr_internal.h` and nothing
+else: no `tuner_r82xx.c`, no sample path, no DSP, no libusb. Those points would have re-tested
+code that did not move. What did move is teardown, so teardown is what was run.
+
+- **Device:** RTL-SDR Blog V4 (R828D) on a Galaxy S25 FE (`SM-S731B`), Android 16 / SDK 36,
+  arm64-v8a. Frequencies are not recorded in that repository and are not repeated here.
+
+| Check | Result |
+| --- | --- |
+| **Unplug while running**, twice | clean teardown both times: 10 and 12 `cb transfer status: 5, canceling...`, then `rtlsdr_read_async returned -5`, `the device was lost`, and `-11` (`PAGER_ERR_DETACHED`) to the app |
+| Teardown duration | **44 ms** from the first cancel to `MyService.onDestroy` |
+| Stop from the UI | clean |
+| **The §3.9 leak path** | never taken |
+| Exported `rtlsdr_*` symbols | **43**, unchanged — v0.4.0 only grew a *private* struct |
+| v0.4.0 actually linked in | the string `leaking transfers and buffers` present in all four `libpager.so` |
+
+That last row is worth borrowing for any pin bump. A submodule pin that is staged but **not
+rebuilt** looks identical in `git status` to one that is, and a stale `.cxx` cache is exactly
+the thing that would hide it — so the check is for a string that exists only at the new tag,
+in every ABI's binary.
+
+The 44 ms also settles the cost this tree predicted for itself. CHANGELOG.md warns that an
+unplug teardown "may now take up to a second longer"; that second is the ceiling of the bounded
+drain, not an expectation, and this workload does not approach it.
+
+Full write-up: `releases/v1.5.1.md` in that repository.
+
+#### Sixth run: RTL_SDR_AIS_Driver, v0.4.0
+
+**2026-09-12/13, same dongle and phone**, via RTL_SDR_AIS_Driver at v1.4.1 / versionCode 57.
+Driven through the `NEMA2src://` API from an external uid (`adb shell`) — the same exported
+`DeviceOpenActivity` entry point AIS-Share uses — so this run exercises the external contract
+of the "External API via a second app" row above, not just the app's own UI.
+
+- **Device:** RTL-SDR Blog V4 (`0bda:2838`, R828D) on a Galaxy S25 FE (`SM-S731B`), Android 16
+  / SDK 36, arm64-v8a.
+
+| Check | Result |
+| --- | --- |
+| Device opens from the fd | four opens across two sessions, no `EBC_SDR_ERR_*`, no `LIBUSB_ERROR_*` |
+| Tuner probe | `Found Rafael Micro R828D tuner` + `RTL-SDR Blog V4 Detected`, identical every time |
+| Streaming | 3.11–3.20 MB/s steady, **`Skipped = 0` in every stats line** |
+| fd / socket stability | 126 → 125 fds, 12 → 12 sockets across a full session; flat |
+| End-to-end decode | one AIS message on channel A — weak indoor reception, but RF to Java callback is proven |
+| **Unplug while running** | 12 × `cb transfer status: 5, canceling...` → `START do_clean_up()` 2 ms later → `Demod Thread joined` → `free(ringbuf); Success` → `END do_clean_up()` **650 ms** after the first cancel → `ABNORMAL EXIT: 29` and a clean `MyService:onDestroy()`. No SIGSEGV, no SIGABRT, no tombstone, no ANR; **PID unchanged throughout**, crash buffer empty |
+| Clean stop via the external API | `START_ACTION 1` → `rtl_ais_close_fast()` → `do_clean_up()` in **37 ms** → **`EXIT OK`**, not the abnormal code. 1.09 s request-to-exit, PID unchanged |
+| **The §3.9 leak path** | never taken |
+| Teardown bounds never approached | 650 ms on unplug, 37 ms on a normal stop, against that app's 2500 ms budget. The 1 s drain and the 2 s close wait are ceilings this workload does not reach |
+| Re-plug | reopened on the first attempt, no `LIBUSB_ERROR_BUSY` |
+
+All three runs stop the device cleanly as well as losing it, so the **non-`dev_lost`** branch
+of `rtlsdr_close()` — the other half §3.9 touched — is covered more than once. This is the run
+that puts a number on it, 37 ms, and the only one where the stop arrives as a command from
+outside the app rather than from a user closing a screen. That is the path
+`rtl_ais_forceclose()` takes, and the reason §3.9 had to bound that wait at all.
+
+Full write-up: `agents.md` §2.1 in that repository.
+
+#### What the three v0.4.0 runs show together
+
+Three callers, three apps, one dongle and one phone. Both branches of `rtlsdr_close()` are
+covered, the bounded drain reaped every transfer in every run, and **the §3.9 fallback was
+taken in none of them** — no `leaking transfers and buffers`, no `async status still`. The
+measured teardowns, 44 ms and 650 ms against a 1 s drain and a 2 s close wait, say the new
+bounds are ceilings rather than costs.
+
+What they still do not show is the reported crash being triggered and then survived, for the
+reason the fourth run gives: the report came from a Redmi A3x through the Play Console, no such
+device was available, and the timing window §3.9 describes is device-dependent. The argument
+that the defect is fixed rests on §3.9's reasoning about `flying_transfers`; these runs show
+that the fix costs nothing on hardware that never enters the window.
 
 
 ---

@@ -8,10 +8,12 @@ Details and reasoning for every item: [PROVENANCE.md](PROVENANCE.md).
 
 ## v0.4.0 — no free of in-flight USB transfers on unplug (2026-09-12)
 
-Bug-fix release for a confirmed Google Play crash. **Not yet hardware-verified** — the one
-test that matters is an unplug while streaming, and it has not been run on a dongle yet. No
-public API change, but the private `struct rtlsdr_dev` gained a field, so every app re-pins
-and rebuilds.
+Bug-fix release for a confirmed Google Play crash. **Hardware-verified.** The test that
+matters is an unplug while streaming, and all three apps have now run it on a dongle, each
+from its own release — PROVENANCE.md §5, runs four to six. No public API change, but the
+private `struct rtlsdr_dev` gained a field, so every app had to re-pin and rebuild. **All
+three have, and this is the tag they pin today:** `rtlsdrPager` at v1.5.1, `rtlsdr433` at
+v1.3.4 and `RTL_SDR_AIS_Driver` at v1.4.1.
 
 ### Fixed
 
@@ -31,7 +33,10 @@ and rebuilds.
   made safe. Both upstreams have the identical defect — PROVENANCE.md section 7.
 
   **Hardware behaviour:** none while streaming. On unplug, teardown may now take up to a
-  second longer before the app is told the device is gone.
+  second longer before the app is told the device is gone — but that is the ceiling, not the
+  expectation. Measured, it was **44 ms** end to end in `rtlsdrPager` and **650 ms** in
+  `RTL_SDR_AIS_Driver` — against the 2.5 s that app allows its teardown, so well inside it.
+  The drain reaped every transfer in every run, and the extra second was never spent.
 
 - **`rtlsdr_close()` waits for the async run even when the device was lost**, bounded at 2 s
   instead of upstream's unbounded spin. Upstream's single `!dev_lost` gate skipped the wait
@@ -63,17 +68,22 @@ and rebuilds.
   against the consumer harness of PROVENANCE.md section 5.
 - LF sweep clean; `grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` = 30 markers
   across 11 files, matching PROVENANCE.md section 3.7.
-- **Open:** the hardware unplug run. Expect no `leaking transfers and buffers` line in
-  logcat on a healthy teardown — if it appears, the drain is too short or a transfer is
-  stuck, and that is the finding to chase.
+- **The hardware unplug run, three times over** — once from each app, all on the same
+  RTL-SDR Blog V4 and Galaxy S25 FE: `rtlsdr433` 1.3.4 on 2026-09-12, `rtlsdrPager` 1.5.1 and
+  `RTL_SDR_AIS_Driver` 1.4.1 on 2026-09-12/13. Clean teardown every time; no abort, no
+  `HandleUsingDestroyedMutex`, no tombstone, PID unchanged across the unplug.
+  **Neither fallback path was taken in any of the three** — no `leaking transfers and
+  buffers` and no `async status still` in logcat — so the bounded drain reaped every
+  transfer, which is the intended outcome and not the fallback. PROVENANCE.md §5, runs four
+  to six.
 
 ---
 
 ## v0.3.0 — PPM search removed (2026-09-04)
 
-**The tag all three apps pin today:** `rtlsdrPager`, `rtlsdr433` (released as v1.3.3) and
-`RTL_SDR_AIS_Driver` (released as v1.4.0 / versionCode 56 on 2026-09-04). Each one is verified
-on a Blog V4 — PROVENANCE.md §5.
+**The tag all three apps pinned until v0.4.0:** `rtlsdrPager`, `rtlsdr433` (released as
+v1.3.3) and `RTL_SDR_AIS_Driver` (released as v1.4.0 / versionCode 56 on 2026-09-04). Each one
+was verified on a Blog V4 — PROVENANCE.md §5.
 
 ### Removed
 
@@ -96,7 +106,7 @@ on a Blog V4 — PROVENANCE.md §5.
 ## Phase 1, the tree is a library (2026-09-04) — shipped in v0.3.0
 
 Written while the phase was current, when no app used the tree yet. All three do now, each
-pinning `v0.3.0`; PROVENANCE.md §4 records what each migration involved.
+pinning `v0.4.0`; PROVENANCE.md §4 records what each migration involved.
 
 ### Added
 

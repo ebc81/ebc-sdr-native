@@ -60,16 +60,31 @@ while the other two have 29.
 The AGC/VGA finding is directly observable: change frequency repeatedly with AGC on. Before
 (rtlsdr433/rtlsdrPager) the noise floor drops after every change; afterwards it does not.
 
+**A consumer pins the gitlink, never a branch.** The pin that counts is the commit recorded in
+the app's index — `git submodule status` must print the tag in parentheses, `(v0.4.0)`, not a
+bare hash and not a branch head. Two things defeat that, and they combine: a `branch =` key in
+the app's `.gitmodules`, and `git submodule update --remote`, which reads that key and moves
+the pin to the tip of `main`. `main` here is routinely a documentation commit *ahead* of the
+tag every app pins, so `--remote` silently swaps a verified tag for an untagged commit that no
+hardware run covers. Use `git submodule update --init` in a consumer, and let a pin move only
+as a deliberate, verified step.
+
 ---
 
 ## Current state
 
-**Phases 0 to 4 are done.** The tree is the union of all three app variants, plus five
+**Phases 0 to 5 are done.** The tree is the union of all three app variants, plus five
 finding fixes, and it builds as a static library `ebc_sdr`. **All three apps use it**, each
-pinning tag `v0.3.0` as a submodule, and each verified on a Blog V4 — PROVENANCE.md §5.
-`RTL_SDR_AIS_Driver` was the last to migrate and released from that pin as v1.4.0 /
-versionCode 56 on 2026-09-04; `rtlsdr433` ships it as v1.3.3. So the state this repository
-was built for — one shared base, same tag, three shipping apps — is reached.
+pinning tag `v0.4.0` as a submodule, and each verified on a Blog V4 from that pin —
+PROVENANCE.md §5, runs four to six. They ship it as `RTL_SDR_AIS_Driver` v1.4.1 /
+versionCode 57 (since superseded by v1.4.2 / 58), `rtlsdr433` v1.3.4 and `rtlsdrPager` v1.5.1.
+
+So the state this repository was built for — one shared base, same tag, three shipping apps —
+is reached, and it has now survived the thing that actually tests it: a coordinated version
+step. `v0.3.0` → `v0.4.0` moved all three apps, each with its own hardware run and its own
+release, and nothing had to be duplicated or forked to do it. The earlier state, when all
+three pinned `v0.3.0`, is the history recorded in CHANGELOG.md and PROVENANCE.md §5; on the
+app side it spanned several releases per app, so no single version number names it.
 
 Phase 1 removed the blocker: `librtlsdr.c` used to be pulled into
 `android/librtlsdr_andro.c` with `#include "rtl-sdr/src/librtlsdr.c"`, because the bridge needs
@@ -82,11 +97,13 @@ enumeration. `rtl-sdr/src/librtlsdr_internal.h` now exposes exactly that much, s
 `librtlsdr.c`, add it to `librtlsdr_internal.h` — moved verbatim, with a PROVENANCE.md §3.8
 entry — rather than restructuring `librtlsdr.c`, which must stay close to upstream.
 
-**Phase 5 is done in all three app repositories** — the GPL source paths on the app side.
-What is left of it is not work but a shipment: the AIS texts are written and wait for the next
-regular release, so the binary in the Play Store still carries the old ones. The per-app state
-is in *Legal posture* below, which is the single place this repository tracks it. Nothing in
-this tree blocks it.
+**Phase 5 is done in all three app repositories** — the GPL source paths on the app side —
+and it is now also **delivered**. The last gap was AIS: its corrected texts existed in the
+repository but had not reached a binary, so the build on Play still carried the old page.
+v1.4.1 / versionCode 57 shipped them, and v1.4.2 / 58 is current. A recipient of any of the
+three binaries now gets a source route that names this repository and the tag that binary was
+actually built from. The per-app state is in *Legal posture* below, which is the single place
+this repository tracks it. Nothing here is outstanding.
 
 The three migrations are the template for any app that adopts this tree later, in the order
 they happened: `rtlsdrPager` commit `2743190`, `rtlsdr433` commit `7f7d7cb`,
@@ -181,13 +198,15 @@ argument for a shared repository over the per-app `-native-gpl` mirrors.
 **Phase 5 lives in the app repositories, not here**, and in all three it is done. Each app's
 source path has to name this repository and the tag it pins, and each existing mirror has to
 shrink to the app-specific native code, with the submodule directory excluded from its sync.
-State on 2026-09-05, read in the app repositories:
+State on 2026-09-13, read in the app repositories. All three now name tag **`v0.4.0`**, which
+is the tag their current binaries were built from — that congruence is the whole point, and it
+is what a pin bump has to carry along:
 
 | App | Phase 5 |
 | --- | --- |
-| `rtlsdr433` | **done and shipped.** `NOTICE` names this repository and tag `v0.3.0` with a three-year written offer; `tools/sync-native-gpl.ps1` excludes the submodule with `/XD ebc-sdr-native`; the mirror is synced and shrunk, tagged v1.3.3. |
-| `rtlsdrPager` | **done, not yet on Play.** Same `NOTICE` and the same script. Its mirror was synced and shrunk with v1.1.2 (`23dde9a`) — the written offer names both repositories — and v1.2.0 (`62a4b24`) tags the mirror alongside the app. |
-| `RTL_SDR_AIS_Driver` | **done in the repository, ships with the next release.** It has no mirror and needs none — the app is GPL as a whole, so what it owes is a written offer over the *entire* app source, and `9f9d9c6` widened the offer to exactly that, added the three-year term and an entry for this repository at tag `v0.3.0`, in a new root `NOTICE` and in the in-app page that is the copy a binary recipient actually gets. `92e6028` made the GPLv2 text reachable there at all. Deliberately without a version bump, so the build in the Play Store (56 / 1.4.0) still carries the old page. |
+| `rtlsdr433` | **done and shipped.** `NOTICE` names this repository and tag `v0.4.0` with a three-year written offer; `tools/sync-native-gpl.ps1` excludes the submodule with `/XD ebc-sdr-native`; the mirror is synced and shrunk. The tag in `NOTICE` moved with the pin at v1.3.4. |
+| `rtlsdrPager` | **done.** Same `NOTICE` and the same script, now at tag `v0.4.0`; it is the only one of the three that also carries the tag in a machine-readable place, `app/config/libraries/ebcsdrnative.json`, which is the copy the in-app licence screen shows. Its mirror was synced and shrunk with v1.1.2 (`23dde9a`) — the written offer names both repositories — and v1.2.0 (`62a4b24`) tags the mirror alongside the app. Its Play state is not tracked here; it was unpublished when this table was first written. |
+| `RTL_SDR_AIS_Driver` | **done and shipped.** It has no mirror and needs none — the app is GPL as a whole, so what it owes is a written offer over the *entire* app source, and `9f9d9c6` widened the offer to exactly that, added the three-year term and an entry for this repository, in a new root `NOTICE` and in the in-app page (`assets/open_source_licenses.html`) that is the copy a binary recipient actually gets. `92e6028` made the GPLv2 text reachable there at all. Both now name tag `v0.4.0`. Those texts were written without a version bump and waited for a release; **v1.4.1 / versionCode 57 delivered them to Play**, and v1.4.2 / 58 is current. The gap where Play still served the old page is closed. |
 
 See KONZEPT-GEMEINSAME-CODEBASE.md §2 and §3.4. Fix any of it **from a session opened in that
 app repository**, not from here.
