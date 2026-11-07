@@ -12,7 +12,9 @@ Bug-fix release. **Hardware-verified**, on a phone whose host controller takes t
 path, which is the only place P15 can act (PROVENANCE.md §5, seventh run). It came out of a
 review of signalware's rtl_tcp_andro v3.2. Its own lifecycle fixes turned out to be P12–P14,
 found independently; see PROVENANCE.md §3.10. No public API change and no struct change, but
-a pin bump still means a rebuild.
+a pin bump still means a rebuild. Pinned by `rtlsdrPager` from v1.8.1 and `rtlsdr433` from
+v1.3.5; each ran its own teardown run on the same scatter-gather-NO phone (PROVENANCE.md §5,
+runs seven and eight).
 
 ### Fixed
 

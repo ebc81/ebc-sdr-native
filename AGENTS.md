@@ -76,10 +76,10 @@ as a deliberate, verified step.
 **Phases 0 to 5 are done.** The tree is the union of all three app variants, plus five
 finding fixes, and it builds as a static library `ebc_sdr`. **All three apps use it**, each
 pinning a tag as a submodule, and each verified on a Blog V4 from its pin (PROVENANCE.md §5,
-runs four to seven). `v0.4.0` ships as `RTL_SDR_AIS_Driver` v1.4.1 / versionCode 57 (since
-superseded by v1.4.2 / 58) and `rtlsdr433` v1.3.4. **`v0.5.0` (2026-11-07) is the current
-tag.** `rtlsdrPager` pins it from v1.8.1. The other two move to it from their own sessions,
-and until then the two tags coexist on purpose. v0.5.0 changes only teardown and one log
+runs four to eight). `v0.4.0` ships as `RTL_SDR_AIS_Driver` v1.4.1 / versionCode 57 (since
+superseded by v1.4.2 / 58). **`v0.5.0` (2026-11-07) is the current tag.** `rtlsdrPager` pins
+it from v1.8.1 and `rtlsdr433` from v1.3.5. `RTL_SDR_AIS_Driver` moves to it from its own
+session, and until then the two tags coexist on purpose. v0.5.0 changes only teardown and one log
 line, and needs no struct change, so a v0.4.0 pin is not wrong, only one fix behind.
 
 So the state this repository was built for — one shared base, same tag, three shipping apps —
@@ -207,7 +207,7 @@ is what a pin bump has to carry along:
 
 | App | Phase 5 |
 | --- | --- |
-| `rtlsdr433` | **done and shipped.** `NOTICE` names this repository and tag `v0.4.0` with a three-year written offer; `tools/sync-native-gpl.ps1` excludes the submodule with `/XD ebc-sdr-native`; the mirror is synced and shrunk. The tag in `NOTICE` moved with the pin at v1.3.4. |
+| `rtlsdr433` | **done and shipped.** `NOTICE` names this repository and tag `v0.5.0` with a three-year written offer; `tools/sync-native-gpl.ps1` excludes the submodule with `/XD ebc-sdr-native`; the mirror is synced and shrunk. The tag in `NOTICE` moves with the pin — `v0.4.0` at v1.3.4, `v0.5.0` at v1.3.5. |
 | `rtlsdrPager` | **done.** Same `NOTICE` and the same script, now at tag `v0.5.0`; it is the only one of the three that also carries the tag in a machine-readable place, `app/config/libraries/ebcsdrnative.json`, which is the copy the in-app licence screen shows. Its mirror was synced and shrunk with v1.1.2 (`23dde9a`) — the written offer names both repositories — and v1.2.0 (`62a4b24`) tags the mirror alongside the app. Its Play state is not tracked here; it was unpublished when this table was first written. |
 | `RTL_SDR_AIS_Driver` | **done and shipped.** It has no mirror and needs none — the app is GPL as a whole, so what it owes is a written offer over the *entire* app source, and `9f9d9c6` widened the offer to exactly that, added the three-year term and an entry for this repository, in a new root `NOTICE` and in the in-app page (`assets/open_source_licenses.html`) that is the copy a binary recipient actually gets. `92e6028` made the GPLv2 text reachable there at all. Both now name tag `v0.4.0`. Those texts were written without a version bump and waited for a release; **v1.4.1 / versionCode 57 delivered them to Play**, and v1.4.2 / 58 is current. The gap where Play still served the old page is closed. |
 

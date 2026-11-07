@@ -280,7 +280,16 @@ scatter-gather (P16 says "NO"), 57 teardowns on the split-URB path: 45 stops fro
 unplugs while streaming and one plug pulled during `rtlsdr_open()`. All of them were clean, in
 one process. P15 is the only change on that path. The run cannot show the out-of-order reap
 itself, because the kernel's reap order is invisible from user space, so it proves that P15
-costs nothing and breaks nothing on the one configuration where it can act.
+costs nothing and breaks nothing on the one configuration where it can act. rtlsdr433
+repeated it on the same phone from its own pin — §5, eighth run.
+
+**Open, cosmetic: P17a's error code reads wrong in rtl_433.** `rtlsdr_read_async()` now
+returns `-ENOMEM` on an allocation failure. rtl_433's `sdr_start_sync()` prints every negative
+return as `libusb_error_name(r)`, and −12 is `LIBUSB_ERROR_NOT_SUPPORTED`, so an out-of-memory
+start would be logged as "NOT_SUPPORTED". Teardown is unaffected. Found in rtlsdr433's review
+of the v0.5.0 bump. The fix belongs here, not in the apps' vendored rtl_433 trees: return
+`LIBUSB_ERROR_NO_MEM` (−11) instead. Upstream's own `-1` / `-2` returns from the same function
+have the same mislabelling, so a fix should cover those too, or deliberately leave them.
 
 **What was dropped: a debug hook to force the P12 leak path (planned as P18).** Following
 signalware `c53650f`, a debug-only system property was to set the drain to zero, so that an
@@ -690,6 +699,29 @@ It cannot show a case P15 rescued. The kernel's reap order cannot be seen from u
 the old stale-URB guard that would have caught such a case reports through `usbi_err`, which
 libusb filters out at the default level. So the absence of that line here means nothing. P15
 therefore rests on libusb's own analysis in issue #607, like P12 rests on §3.9's reasoning.
+
+#### Eighth run: rtlsdr433, v0.5.0, same phone
+
+**2026-11-07**, rtlsdr433 debug build at v1.3.5 (pin `a18eb72`), rtl_433 on top instead of the
+pager DSP. Same teardown focus as the seventh run, plus the bands and gain modes of the app's
+device checklist.
+
+- **Devices:** RTL-SDR Blog V4 (R828D) on the Galaxy A12 (`SM-A125F`, Android 12), **`usbfs caps
+  0x77: bulk scatter-gather NO`** on every one of the 27 opens.
+
+| Check | Result |
+| --- | --- |
+| 433.92 MHz, gain auto | decoding (inFactory-TH, two IDs) |
+| 315 MHz; 868.3 MHz at 1.024 MS/s, manual 20 dB | tuned and streaming; gain snapped to 20.7 dB |
+| Stop from the UI, 15 cycles plus one during the start phase | all clean, stop 1.0–1.5 s, one process |
+| **Unplug while streaming**, 6 times | every one clean: 11–15 transfers report status 5 within ~10 ms, `rtlsdr_read_async` returns at once (rtl_433 logs it as `-5`, `LIBUSB_ERROR_NOT_FOUND`), the app's watchdog reports `STOPPED` 1.6–3.5 s later. No `leaking transfers and buffers` |
+| Re-plug | reopened on the first try, 6 of 6, in the same process |
+| `am force-stop` while streaming, relaunch, stick untouched | opened on the first try, decodes resumed |
+| Resources | no `bus/usb` fd after a stop; libusb's eventfds and pipes released; 154 → 152 fds across the unplug series; crash buffer empty |
+
+Not run in this app: a wobbled connector and a pull inside `rtlsdr_open()`. The seventh run
+covered both on the same phone and the same tag. Like that run, this one cannot show a reap
+that P15 rescued, only that the split-URB path stays clean under rtl_433's teardown.
 
 
 ---

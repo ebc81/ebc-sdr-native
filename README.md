@@ -6,8 +6,8 @@ enumeration. It builds as one static library target, `ebc_sdr`.
 
 Three apps use it, each pinning a tag as a git submodule: `RTL_SDR_AIS_Driver`,
 `rtlsdr433` and `rtlsdrPager`. **The current tag is `v0.5.0`.** `rtlsdrPager` pins it from
-v1.8.1. The other two still pin `v0.4.0`, shipped as v1.4.1 and v1.3.4. Every pin was
-verified on real hardware.
+v1.8.1 and `rtlsdr433` from v1.3.5. `RTL_SDR_AIS_Driver` still pins `v0.4.0`, shipped as
+v1.4.1. Every pin was verified on real hardware.
 
 [osmo]: https://github.com/osmocom/rtl-sdr
 [libusb]: https://github.com/libusb/libusb
