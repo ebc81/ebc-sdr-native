@@ -1749,9 +1749,42 @@ int rtlsdr_read_sync(rtlsdr_dev_t *dev, void *buf, int len, int *n_read)
 	return libusb_bulk_transfer(dev->devh, 0x81, buf, len, n_read, BULK_TIMEOUT);
 }
 
+/* __EBCANDROID__: is xfer one of the transfers of the set currently allocated
+ * for this device? At most xfer_buf_num pointer compares, a few times per
+ * second. See _libusb_callback() and PROVENANCE.md 3.10 / P17. */
+static int _rtlsdr_xfer_is_current(rtlsdr_dev_t *dev,
+				   struct libusb_transfer *xfer)
+{
+	unsigned int i;
+
+	if (!dev->xfer)
+		return 0;
+
+	for (i = 0; i < dev->xfer_buf_num; ++i) {
+		if (dev->xfer[i] == xfer)
+			return 1;
+	}
+
+	return 0;
+}
+
 static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 {
 	rtlsdr_dev_t *dev = (rtlsdr_dev_t *)xfer->user_data;
+
+	/* __EBCANDROID__: a transfer from a set _rtlsdr_free_async_buffers() had to
+	 * leak is no longer in dev->xfer, but libusb still knows it, and the next
+	 * rtlsdr_read_async() on this device handles events on the same context.
+	 * If it completed then, it would be counted against the NEW set (which
+	 * starts xfer_outstanding at 0, so the drain could later stop one short and
+	 * free a transfer that is still in flight), fed to the new callback, and
+	 * re-armed as a stranger the cancel loop never cancels. Ignore it entirely:
+	 * no count, no data, no resubmit. libusb_close() unlinks it later. This
+	 * replaces signalware rtl_tcp_andro's xfer_leaked flag, which is reset at
+	 * the start of each run and so does not cover this case. See
+	 * PROVENANCE.md 3.10 / P17. */
+	if (!_rtlsdr_xfer_is_current(dev, xfer))
+		return;
 
 	/* __EBCANDROID__: libusb calls this exactly once per submission, after the
 	 * transfer has been taken off ctx->flying_transfers -- whatever its status, it
@@ -1811,19 +1844,31 @@ static int _rtlsdr_alloc_async_buffers(rtlsdr_dev_t *dev)
 	if (!dev)
 		return -1;
 
+	/* __EBCANDROID__: every allocation is checked, and both pointer arrays are
+	 * calloc()ed so that a set abandoned half-way holds only valid pointers or
+	 * NULL, which is what _rtlsdr_free_async_buffers() expects. Upstream
+	 * dereferenced an unchecked malloc() here (memset on NULL, and NULL
+	 * transfers handed to libusb_fill_bulk_transfer()). See PROVENANCE.md
+	 * 3.10 / P17. */
 	if (!dev->xfer) {
-		dev->xfer = malloc(dev->xfer_buf_num *
+		dev->xfer = calloc(dev->xfer_buf_num,
 				   sizeof(struct libusb_transfer *));
+		if (!dev->xfer)
+			return -ENOMEM;
 
-		for(i = 0; i < dev->xfer_buf_num; ++i)
+		for(i = 0; i < dev->xfer_buf_num; ++i) {
 			dev->xfer[i] = libusb_alloc_transfer(0);
+			if (!dev->xfer[i])
+				return -ENOMEM;
+		}
 	}
 
 	if (dev->xfer_buf)
 		return -2;
 
-	dev->xfer_buf = malloc(dev->xfer_buf_num * sizeof(unsigned char *));
-	memset(dev->xfer_buf, 0, dev->xfer_buf_num * sizeof(unsigned char *));
+	dev->xfer_buf = calloc(dev->xfer_buf_num, sizeof(unsigned char *));
+	if (!dev->xfer_buf)
+		return -ENOMEM;
 
 #if defined(ENABLE_ZEROCOPY) && defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
 	fprintf(stderr, "Allocating %d zero-copy buffers\n", dev->xfer_buf_num);
@@ -1981,7 +2026,17 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 	else
 		dev->xfer_buf_len = DEFAULT_BUF_LENGTH;
 
-	_rtlsdr_alloc_async_buffers(dev);
+	/* __EBCANDROID__: upstream ignored this result and went on to fill and
+	 * submit transfers out of a NULL array or into NULL buffers. Nothing has
+	 * been submitted yet, so xfer_outstanding is 0 and the free below releases
+	 * whatever part of the set was allocated. See PROVENANCE.md 3.10 / P17. */
+	r = _rtlsdr_alloc_async_buffers(dev);
+	if (r < 0) {
+		fprintf(stderr, "rtlsdr: failed to allocate async buffers: %d\n", r);
+		_rtlsdr_free_async_buffers(dev);
+		dev->async_status = RTLSDR_INACTIVE;
+		return r;
+	}
 
 	for(i = 0; i < dev->xfer_buf_num; ++i) {
 		libusb_fill_bulk_transfer(dev->xfer[i],
