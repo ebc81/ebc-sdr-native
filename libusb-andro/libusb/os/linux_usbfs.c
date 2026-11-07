@@ -2539,10 +2539,21 @@ static int handle_bulk_completion(struct usbi_transfer *itransfer,
 		goto cancel_remaining;
 	}
 
-	/* if we're the last urb or we got less data than requested then we're
+	/* if we've reaped all urbs or we got less data than requested then we're
 	 * done */
-	if (urb_idx == tpriv->num_urbs - 1) {
-		usbi_dbg("last URB in transfer --> complete!");
+	/* __EBCANDROID__: backport of libusb 9eda802d (1.0.24, issue #607). This
+	 * tested urb_idx == num_urbs - 1, i.e. "the URB with the LAST INDEX came
+	 * back", and freed tpriv->urbs on it. On an unplug the kernel reaps URBs out
+	 * of submission order, so with a 256 KiB transfer split into 16 URBs (any
+	 * host controller without USBFS_CAP_BULK_SCATTER_GATHER) the last index can
+	 * arrive while 15 URBs are still in the kernel. Their later reaps then
+	 * return pointers into the freed array, and the stale-URB guards in
+	 * reap_for_handle() and above read freed heap to recognise them -- the
+	 * usbi_handle_transfer_completion() use-after-free MTE reports. Counting
+	 * retired URBs removes the cause; the guards stay as a second line.
+	 * See PROVENANCE.md 3.10 / P15. */
+	if (tpriv->num_retired == tpriv->num_urbs) {
+		usbi_dbg("all URBs in transfer reaped --> complete!");
 		goto completed;
 	} else if (urb->actual_length < urb->buffer_length) {
 		usbi_dbg("short transfer %d/%d --> complete!",
@@ -2689,9 +2700,12 @@ static int handle_iso_completion(struct usbi_transfer *itransfer,
 		break;
 	}
 
-	/* if we're the last urb then we're done */
-	if (urb_idx == num_urbs) {
-		usbi_dbg("last URB in transfer --> complete!");
+	/* if we've reaped all urbs then we're done */
+	/* __EBCANDROID__: same backport (libusb 9eda802d) for the iso path. No EBC
+	 * app submits iso transfers; kept in step so the two paths cannot disagree.
+	 * See PROVENANCE.md 3.10 / P15. */
+	if (tpriv->num_retired == num_urbs) {
+		usbi_dbg("all URBs in transfer reaped --> complete!");
 		free_iso_urbs(tpriv);
 		usbi_mutex_unlock(&itransfer->lock);
 		return usbi_handle_transfer_completion(itransfer, status);

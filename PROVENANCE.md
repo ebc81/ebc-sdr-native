@@ -257,6 +257,21 @@ processed`). Freeing is the one thing that cannot be made safe. The cost is boun
 one-off — at most `xfer_buf_num` transfers plus their buffers, a few MB, at the end of a
 device's life — and the next `rtlsdr_read_async()` allocates a fresh set.
 
+### 3.10 v0.5.0 — what signalware's rtl_tcp_andro v3.2 had that this tree did not
+
+Prompted by [signalwareltd/rtl_tcp_andro-](https://github.com/signalwareltd/rtl_tcp_andro-)
+v3.16 (2026-08-16) and v3.2 (2026-10-31, commits `437d217`, `c53650f`). That driver carries the
+same Martin-Marinov lineage as this tree and hit the same unplug crash. Read against v0.4.0, its
+`librtlsdr.c` changes are **P12 to P14 found independently** — an outstanding-transfer counter, a
+bounded drain after cancel, leaking instead of freeing on timeout, a checked resubmit — which is
+the best outside confirmation those three have had. What it had and this tree lacked is below;
+everything else it changed (TCP server teardown, self-pipes, work pool, session queue,
+`POST_NOTIFICATIONS`) has no counterpart here or is already solved in the apps.
+
+| # | Finding | Severity | Commit | What changed |
+| --- | --- | --- | --- | --- |
+| P15 | `handle_bulk_completion()` freed a transfer's URB array when the URB with the **last index** came back, not when **all** had | **high** (potential) | `v0.5.0` | Backport of libusb [`9eda802d`](https://github.com/libusb/libusb/commit/9eda802d947d9c4212eb3f821fa51956029dade0) (2020-01-16, libusb 1.0.24, issue #607) — after this tree's 1.0.23 baseline, so it was never in it. The test `urb_idx == tpriv->num_urbs - 1` becomes `tpriv->num_retired == tpriv->num_urbs`, in the bulk path and, for consistency, the unused iso path. **Why it bites:** without `USBFS_CAP_BULK_SCATTER_GATHER` a transfer is split into 16 KiB URBs, so rtlsdrPager's 256 KiB transfer is 16 URBs. On an unplug the kernel reaps them out of submission order; when the last index arrives first with status 0, `tpriv->urbs` is freed with 15 URBs still in the kernel, and their later reaps hand back pointers into freed memory. The stale-URB guards from §3.4 — `usercontext` zeroed before the free, the `!tpriv->urbs` check, the NULL check in `reap_for_handle()` — recognise such a URB **by reading the freed array**, so they narrow the window without closing it; under MTE that read is the `usbi_handle_transfer_completion` report the comment in `_libusb_callback()` describes. P15 removes the cause; the guards stay as a second line. The companion fix signalware names, libusb `00e36c8` (reap first, then `usbi_handle_disconnect()` on `POLLERR`), was **already present** — it is from 2016. **Not taken: the full libusb 1.0.30 upgrade** signalware did (~9 000 lines, `libusb_init_context(NO_DEVICE_DISCOVERY)`). It would re-open every §3.4 patch at once, in all three apps at once, and for this tree it buys P15 and nothing else that is known. |
+
 ---
 
 ## 4. Building it
