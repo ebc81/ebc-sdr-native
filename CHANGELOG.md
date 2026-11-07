@@ -6,6 +6,43 @@ the dongle does.
 
 Details and reasoning for every item: [PROVENANCE.md](PROVENANCE.md).
 
+## v0.5.0 — libusb no longer frees split URBs early on unplug (2026-11-07)
+
+Bug-fix release. **Hardware-verified**, on a phone whose host controller takes the split-URB
+path, which is the only place P15 can act (PROVENANCE.md §5, seventh run). It came out of a
+review of signalware's rtl_tcp_andro v3.2. Its own lifecycle fixes turned out to be P12–P14,
+found independently; see PROVENANCE.md §3.10. No public API change and no struct change, but
+a pin bump still means a rebuild.
+
+### Fixed
+
+- **libusb freed a transfer's URBs too early on unplug (P15, severity high but potential).**
+  This is a backport of libusb `9eda802d` (1.0.24); this tree's 1.0.23 baseline predates it. A
+  split transfer counted as finished when the URB with the last *index* came back, not when
+  all of them had. On a host controller without scatter-gather, an unplug reaps them out of
+  order, and the remaining URBs then pointed into freed memory. The existing stale-URB guards
+  shrank that window; this closes it.
+- **Unchecked allocation in `rtlsdr_read_async()` (P17a).** A failed allocation is now an
+  error return instead of a NULL dereference.
+- **Late completions from a leaked transfer set (P17b)** are now ignored. Before, they were
+  counted against the next run on the same device, fed into it and re-armed there.
+
+### Added
+
+- **One logcat line per open, tag `libusb`, saying whether the host controller does bulk
+  scatter-gather (P16).** "NO" is the only configuration in which P15 can be tested.
+
+### Not added
+
+- A debug hook to force the P12 leak path, after signalware `c53650f`. It was built and run
+  and could not reach that path on either test phone: on unplug every transfer has already
+  come back before the drain would start. PROVENANCE.md §3.10 has the details.
+
+**Hardware behaviour:** none while streaming. Teardown was tested on a Galaxy A12
+(`usbfs caps 0x77`, scatter-gather NO, 16 URBs per transfer). The run covered 45 stops from the
+UI, 11 unplugs while streaming, a wobbled connector and one plug pulled during open. All were
+clean, in one process, with nothing leaked.
+
 ## v0.4.0 — no free of in-flight USB transfers on unplug (2026-09-12)
 
 Bug-fix release for a confirmed Google Play crash. **Hardware-verified.** The test that

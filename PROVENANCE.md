@@ -2,8 +2,9 @@
 
 **Tree:** shared native SDR base for the EBC Android apps (working title `ebc-sdr-native`)
 **Created:** 2026-09-04 (Phases 0 and 1 of [KONZEPT-GEMEINSAME-CODEBASE.md](KONZEPT-GEMEINSAME-CODEBASE.md))
-**Status:** builds as a static library, `ebc_sdr`. **All three apps use it**, each pinning tag
-`v0.4.0` as a submodule, and each verified on a Blog V4 from that pin (§5, runs four to six).
+**Status:** builds as a static library, `ebc_sdr`. **All three apps use it**, each pinning a tag
+as a submodule: `rtlsdrPager` `v0.5.0`, the other two `v0.4.0`. Each was verified on a Blog V4
+from its pin (§5, runs four to seven).
 Phases 0 to 5 are done. Phase 5 is the GPL source paths on the app side, is no work in this
 repository, and has now shipped in all three apps; its per-app state is tracked in one place,
 [AGENTS.md](AGENTS.md) *Legal posture*.
@@ -186,7 +187,7 @@ the library is Android-only, so there is no non-Android branch to select. Defini
 branch on the platform is `ebc_log.h`, and it uses the NDK's own `__ANDROID__` so the tree
 still preprocesses on a host for analysis.
 
-`grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` currently finds 30 markers across
+`grep -rn __EBCANDROID__ rtl-sdr libusb-andro android` currently finds 38 markers across
 11 files. Every local deviation should have one.
 
 ---
@@ -273,6 +274,25 @@ everything else it changed (TCP server teardown, self-pipes, work pool, session 
 | P15 | `handle_bulk_completion()` freed a transfer's URB array when the URB with the **last index** came back, not when **all** had | **high** (potential) | `v0.5.0` | Backport of libusb [`9eda802d`](https://github.com/libusb/libusb/commit/9eda802d947d9c4212eb3f821fa51956029dade0) (2020-01-16, libusb 1.0.24, issue #607) — after this tree's 1.0.23 baseline, so it was never in it. The test `urb_idx == tpriv->num_urbs - 1` becomes `tpriv->num_retired == tpriv->num_urbs`, in the bulk path and, for consistency, the unused iso path. **Why it bites:** without `USBFS_CAP_BULK_SCATTER_GATHER` a transfer is split into 16 KiB URBs, so rtlsdrPager's 256 KiB transfer is 16 URBs. On an unplug the kernel reaps them out of submission order; when the last index arrives first with status 0, `tpriv->urbs` is freed with 15 URBs still in the kernel, and their later reaps hand back pointers into freed memory. The stale-URB guards from §3.4 — `usercontext` zeroed before the free, the `!tpriv->urbs` check, the NULL check in `reap_for_handle()` — recognise such a URB **by reading the freed array**, so they narrow the window without closing it; under MTE that read is the `usbi_handle_transfer_completion` report the comment in `_libusb_callback()` describes. P15 removes the cause; the guards stay as a second line. The companion fix signalware names, libusb `00e36c8` (reap first, then `usbi_handle_disconnect()` on `POLLERR`), was **already present** — it is from 2016. **Not taken: the full libusb 1.0.30 upgrade** signalware did (~9 000 lines, `libusb_init_context(NO_DEVICE_DISCOVERY)`). It would re-open every §3.4 patch at once, in all three apps at once, and for this tree it buys P15 and nothing else that is known. |
 | P16 | Nothing said which bulk path a host controller takes | diagnostic | `v0.5.0` | `initialize_handle()` writes one logcat line per open, tag `libusb`: `usbfs caps 0x…: bulk scatter-gather yes/NO`. Written with `__android_log_print()` directly, because at the default context level libusb filters every `usbi_*` message, `usbi_err` included. **Why it matters:** P15 can only be exercised on a "NO" device. Signalware's own note is that both of its test phones advertise scatter-gather, so its multi-URB fix is unverified on hardware; a P15 hardware run that does not show "NO" in this line has not tested P15. |
 | P17 | Unchecked allocation, and late completions of a leaked transfer set | low | `v0.5.0` | (a) `_rtlsdr_alloc_async_buffers()` dereferenced an unchecked `malloc()` (`memset` on NULL; NULL transfers to `libusb_fill_bulk_transfer()`), and `rtlsdr_read_async()` ignored its result. Both pointer arrays are `calloc()`ed and every allocation is checked; on failure the caller frees the partial set — `xfer_outstanding` is still 0 there — resets `async_status` and returns the error. Signalware added the caller check only. (b) After P12 leaks a set, its transfers stay on libusb's list. If the same `dev` runs `rtlsdr_read_async()` again — which the P12 comment explicitly anticipates — a late completion of an old transfer would be counted against the new set, whose counter starts at 0, so the drain could stop one short and free a transfer still in flight; it would also be fed to the new callback and re-armed as a stranger the cancel loop never cancels. `_libusb_callback()` now returns at once for any transfer not in the current `dev->xfer`. Signalware's `xfer_leaked` flag does not cover this, because it is reset at the start of each run. `libusb_close()` was checked: `do_close()` only unlinks, it calls no callbacks, so a new run on the same device is the only way such a completion can arrive. |
+
+**Hardware status: verified, 2026-11-07 — §5, seventh run.** On a host controller without
+scatter-gather (P16 says "NO"), 57 teardowns on the split-URB path: 45 stops from the UI, 11
+unplugs while streaming and one plug pulled during `rtlsdr_open()`. All of them were clean, in
+one process. P15 is the only change on that path. The run cannot show the out-of-order reap
+itself, because the kernel's reap order is invisible from user space, so it proves that P15
+costs nothing and breaks nothing on the one configuration where it can act.
+
+**What was dropped: a debug hook to force the P12 leak path (planned as P18).** Following
+signalware `c53650f`, a debug-only system property was to set the drain to zero, so that an
+unplug would take the deliberate-leak path. It was built and run on both test phones, and it
+**could not reach that path on either one**. On unplug the kernel fails every URB at once, so
+every transfer's callback has run before the event loop breaks and `xfer_outstanding` is
+already 0; a stop from the UI waits for every cancellation anyway. Whether the drain runs makes
+no difference to anything this desk can produce. A hook that cannot do its one job is not
+worth carrying in a vendored file, so it was taken out before the tag, together with its
+`<sys/system_properties.h>` include. Forcing the leak path would need fault injection inside the
+event loop. Only the Play Console report §3.9 answers has ever shown the state that path
+handles.
 
 ---
 
@@ -639,6 +659,37 @@ reason the fourth run gives: the report came from a Redmi A3x through the Play C
 device was available, and the timing window §3.9 describes is device-dependent. The argument
 that the defect is fixed rests on §3.9's reasoning about `flying_transfers`; these runs show
 that the fix costs nothing on hardware that never enters the window.
+
+
+#### Seventh run: rtlsdrPager, v0.5.0, on a phone without scatter-gather
+
+**2026-11-07**, using rtlsdrPager's debug build with P15 to P17 built in. This tree's teardown
+path, not tuner behaviour, is what changed, so this was again a teardown run. Its one new
+requirement came from P16: **a run only tests P15 if that line says "NO"**. The S25 FE used
+for every run so far says yes (`usbfs caps 0x1fd`), so a second phone was used.
+
+- **Devices:** RTL-SDR Blog V4 (R828D). Phone 1 is a Galaxy A12 (`SM-A125F`, Android 12), arm64-v8a,
+  **`usbfs caps 0x77: bulk scatter-gather NO`**, so each 256 KiB transfer is 16 URBs. Phone 2 is
+  the S25 FE from the earlier runs (`SM-S731B`, now Android 17), caps `0x1fd`, scatter-gather yes,
+  used as the control. Frequencies are not recorded.
+
+| Check (A12 unless stated) | Result |
+| --- | --- |
+| Streaming on 16 URBs per transfer | full rate, ring overflow 0, discriminator mean near zero. With a wrong P15 condition no transfer would ever complete |
+| Stop from the UI, 45 cycles | 45/45 return 0; IQ after ~1.6 s, stop 1.07–1.38 s, PID unchanged |
+| **Unplug while streaming**, 11 times | every one clean: `rtlsdr_read_async returned -5`, `the device was lost`, `-11` to the app, `device closed` **2–16 ms** after the first `cb transfer status: 5`. Between 4 and 12 transfers reported `NO_DEVICE` per unplug, the rest came back cancelled, so the reaps arrived in a different order each time |
+| Wobbled connector | four unplugs within about 20 s. In one of them, the app's detach receiver won the race and stopped the session itself (return 0, not -11), also clean |
+| Plug pulled after ~1 s, inside `rtlsdr_open()` | `EEPROM read failed`, `No supported tuner found`, `-3` to the app, `device closed`, service destroyed. Clean |
+| 3 unplugs with the drain set to 0 (the dropped P18 hook) | identical to the above. **The §3.9 leak path was never taken** — see §3.10 |
+| Resources across all of it | one process throughout; 148 fds before and after; no `bus/usb` fd left open; wake lock released on its bounded timeout; crash buffer empty; no `leaking transfers and buffers` line |
+| S25 FE control | 2 unplugs, 12 × `NO_DEVICE` each, clean in ~5 ms; stop from the UI clean |
+
+**What it does and does not show.** It shows P15 is harmless and correct on the configuration
+it exists for: 57 teardowns, and the normal completion path carrying every transfer in between.
+It cannot show a case P15 rescued. The kernel's reap order cannot be seen from user space, and
+the old stale-URB guard that would have caught such a case reports through `usbi_err`, which
+libusb filters out at the default level. So the absence of that line here means nothing. P15
+therefore rests on libusb's own analysis in issue #607, like P12 rests on §3.9's reasoning.
 
 
 ---
