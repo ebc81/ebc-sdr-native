@@ -42,6 +42,11 @@
 #include "libusbi.h"
 #include "linux_usbfs.h"
 
+#ifdef __ANDROID__
+/* __EBCANDROID__: for the usbfs caps line in initialize_handle(), P16. */
+#include <android/log.h>
+#endif
+
 /* sysfs vs usbfs:
  * opening a usbfs node causes the device to be resumed, so we attempt to
  * avoid this during enumeration.
@@ -1420,6 +1425,21 @@ static int initialize_handle(struct libusb_device_handle *handle, int fd)
 		if (supports_flag_bulk_continuation)
 			hpriv->caps |= USBFS_CAP_BULK_CONTINUATION;
 	}
+
+#ifdef __ANDROID__
+	/* __EBCANDROID__: one line per open saying which bulk path this host
+	 * controller takes. Without scatter-gather a transfer over 16 KiB is split
+	 * into several URBs, the only configuration in which the out-of-order reap
+	 * fixed by P15 can happen -- so a hardware test of P15 is only a test if
+	 * this line says "NO". Written directly: usbi_* logging is filtered out
+	 * at the default context level, even usbi_err. Same tag as core.c.
+	 * See PROVENANCE.md 3.10 / P16. */
+	__android_log_print(ANDROID_LOG_INFO, "libusb",
+		"usbfs caps 0x%x: bulk scatter-gather %s", hpriv->caps,
+		(hpriv->caps & USBFS_CAP_BULK_SCATTER_GATHER) ?
+			"yes, one URB per transfer" :
+			"NO, transfers over 16 KiB are split into 16 KiB URBs");
+#endif
 
 	return usbi_add_pollfd(HANDLE_CTX(handle), hpriv->fd, POLLOUT);
 }
